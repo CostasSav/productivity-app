@@ -107,6 +107,48 @@ function ExtractedTasksModal({ tasks, onConfirm, onClose }: {
   );
 }
 
+function nodeToMarkdown(node: Node, depth: number): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+  if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+  const el = node as Element;
+  const tag = el.tagName.toLowerCase();
+
+  if (tag === 'ul' || tag === 'ol') {
+    const indent = '  '.repeat(depth);
+    let result = '';
+    let itemIndex = 1;
+    for (const child of Array.from(el.children)) {
+      if (child.tagName.toLowerCase() !== 'li') continue;
+      const prefix = tag === 'ol' ? `${itemIndex}. ` : '- ';
+      let lineText = '';
+      let nested = '';
+      for (const n of Array.from(child.childNodes)) {
+        if (n.nodeType === Node.ELEMENT_NODE) {
+          const t = (n as Element).tagName.toLowerCase();
+          if (t === 'ul' || t === 'ol') nested += nodeToMarkdown(n, depth + 1);
+          else lineText += n.textContent ?? '';
+        } else {
+          lineText += n.textContent ?? '';
+        }
+      }
+      lineText = lineText.trim();
+      if (lineText) result += `${indent}${prefix}${lineText}\n`;
+      if (nested) result += nested;
+      itemIndex++;
+    }
+    return result;
+  }
+
+  const children = Array.from(node.childNodes).map(n => nodeToMarkdown(n, depth)).join('');
+  if (['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'].includes(tag)) {
+    const trimmed = children.trim();
+    return trimmed ? trimmed + '\n' : '';
+  }
+  if (tag === 'br') return '\n';
+  return children;
+}
+
 export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdated, onCreateSection }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
@@ -195,6 +237,25 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
     showToast(`${tasks.length} task${tasks.length !== 1 ? 's' : ''} added`);
   };
 
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData('text/html');
+    if (!html) return;
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    if (!doc.querySelector('ul, ol')) return;
+
+    e.preventDefault();
+    const markdown = nodeToMarkdown(doc.body, 0).trim();
+    const textarea = e.currentTarget;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const next = content.slice(0, start) + markdown + content.slice(end);
+    setContent(next);
+    requestAnimationFrame(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + markdown.length;
+    });
+  }, [content]);
+
   const contentTooShort = content.trim().length < 50;
 
   return (
@@ -226,7 +287,7 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {tab === 'edit' ? (
-          <textarea value={content} onChange={e => setContent(e.target.value)}
+          <textarea value={content} onChange={e => setContent(e.target.value)} onPaste={handlePaste}
             className="w-full h-full min-h-64 text-sm text-gray-700 dark:text-gray-200 border-none outline-none resize-none font-mono leading-relaxed bg-transparent"
             placeholder="Write your note here... (Markdown supported)" />
         ) : (
