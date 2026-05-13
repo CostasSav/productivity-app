@@ -8,6 +8,8 @@ import notesRouter from './routes/notes';
 import aiRouter from './routes/ai';
 import sectionsRouter from './routes/sections';
 import pomodoroSessionsRouter from './routes/pomodoroSessions';
+import habitsRouter from './routes/habits';
+import habitLogsRouter from './routes/habitLogs';
 import { db } from './db/database';
 
 const dataDir = path.join(__dirname, '../data');
@@ -25,6 +27,8 @@ app.use('/api/tasks', tasksRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/pomodoro-sessions', pomodoroSessionsRouter);
+app.use('/api/habits', habitsRouter);
+app.use('/api/habit-logs', habitLogsRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

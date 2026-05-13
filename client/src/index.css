@@ -10,3 +10,33 @@
     overflow: hidden;
   }
 }
+
+/* Habit completion animations */
+@keyframes habit-pop {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.4); }
+  65%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.animate-habit-pop {
+  animation: habit-pop 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes confetti-fly {
+  0%   { transform: rotate(var(--angle)) translateX(0px) scale(1); opacity: 1; }
+  100% { transform: rotate(var(--angle)) translateX(32px) scale(0); opacity: 0; }
+}
+
+.confetti-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin: -3.5px 0 0 -3.5px;
+  background-color: var(--color, #6366f1);
+  animation: confetti-fly 0.5s ease-out forwards;
+  pointer-events: none;
+}

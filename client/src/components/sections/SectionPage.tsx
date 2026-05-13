@@ -5,8 +5,10 @@ import { NoteList } from '../notes/NoteList';
 import { NoteEditor } from '../notes/NoteEditor';
 import { useTasks } from '../../hooks/useTasks';
 import { useNotes } from '../../hooks/useNotes';
+import { useHabits } from '../../hooks/useHabits';
 import { api } from '../../api';
 import { CalendarView } from '../calendar/CalendarView';
+import { isDue, localDateStr, logToLocalDate, calcCurrentStreak } from '../../utils/habitStats';
 
 interface SectionPageProps {
   section: Section;
@@ -26,7 +28,8 @@ const PALETTE = [
 export function SectionPage({ section, sections, onCreateSection, onEditSection, onDeleteSection, onFocusTask }: SectionPageProps) {
   const { tasks } = useTasks();
   const { notes, createNote, updateNoteInList, deleteNote } = useNotes();
-  const [tab, setTab] = useState<'tasks' | 'notes' | 'calendar'>('tasks');
+  const { habits, logs: habitLogs, logHabit, unlogHabit } = useHabits();
+  const [tab, setTab] = useState<'tasks' | 'notes' | 'calendar' | 'habits'>('tasks');
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [editing, setEditing] = useState(false);
@@ -37,6 +40,21 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
   const sectionTasks = tasks.filter(t => t.section_id === section.id);
   const activeTasks = sectionTasks.filter(t => t.status !== 'done');
   const sectionNotes = notes.filter(n => n.section_id === section.id);
+  const sectionHabits = habits.filter(h => !h.archivedAt && h.sectionId === section.id);
+
+  // Habit log lookups for today
+  const todayStr = localDateStr();
+  const todayDow = new Date().getDay();
+  const todayLogByHabitId = new Map<number, typeof habitLogs[0]>();
+  const logDatesByHabitId = new Map<number, Set<string>>();
+  habitLogs.forEach(l => {
+    const dateStr = logToLocalDate(l.completedAt);
+    if (!logDatesByHabitId.has(l.habitId)) logDatesByHabitId.set(l.habitId, new Set());
+    logDatesByHabitId.get(l.habitId)!.add(dateStr);
+    if (dateStr === todayStr && !todayLogByHabitId.has(l.habitId)) {
+      todayLogByHabitId.set(l.habitId, l);
+    }
+  });
 
   useEffect(() => {
     if (!selectedNoteId && sectionNotes.length > 0) setSelectedNoteId(sectionNotes[0].id);
@@ -112,6 +130,9 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
             <div className="flex gap-3 text-sm text-gray-500 dark:text-gray-400 mr-4">
               <span><strong className="text-gray-800 dark:text-gray-100">{activeTasks.length}</strong> active tasks</span>
               <span><strong className="text-gray-800 dark:text-gray-100">{sectionNotes.length}</strong> notes</span>
+              {sectionHabits.length > 0 && (
+                <span><strong className="text-gray-800 dark:text-gray-100">{sectionHabits.length}</strong> habits</span>
+              )}
             </div>
             <button onClick={() => setEditing(true)} className="p-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded" title="Edit section">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -135,6 +156,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
         {tabBtn('tasks', `Tasks (${activeTasks.length})`)}
         {tabBtn('notes', `Notes (${sectionNotes.length})`)}
         {tabBtn('calendar', 'Calendar')}
+        {tabBtn('habits', `Habits (${sectionHabits.length})`)}
       </div>
 
       <div className="flex-1 overflow-hidden">
@@ -165,6 +187,62 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
         {tab === 'calendar' && (
           <div className="h-full overflow-y-auto">
             <CalendarView tasks={tasks} sections={sections} onUpdateTask={(id, data) => api.tasks.update(id, data as Partial<Task>)} onCreateTask={data => api.tasks.create(data as Partial<Task>)} onCreateSection={onCreateSection} filterSectionId={section.id} />
+          </div>
+        )}
+
+        {tab === 'habits' && (
+          <div className="h-full overflow-y-auto py-2">
+            {sectionHabits.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
+                <p className="text-3xl mb-3">🔥</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No habits in this section.</p>
+                <p className="text-xs mt-1">Assign habits to this section from the Habits page.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {sectionHabits.map(habit => {
+                  const logDates = logDatesByHabitId.get(habit.id) ?? new Set<string>();
+                  const todayLog = todayLogByHabitId.get(habit.id) ?? null;
+                  const streak = calcCurrentStreak(habit, logDates);
+                  const dueToday = isDue(habit, todayDow);
+                  const unitLabel = habit.frequency === 'weekly' ? 'week' : 'day';
+                  const done = !!todayLog;
+
+                  return (
+                    <div key={habit.id} className="relative flex items-center gap-3 p-4 rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: habit.color }} />
+                      <span className="text-xl leading-none flex-shrink-0">{habit.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-medium leading-snug ${done ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>
+                          {habit.name}
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                          {done
+                            ? <span className="text-green-600 dark:text-green-400 font-medium">✓ Done today</span>
+                            : streak > 0
+                              ? `🔥 ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
+                              : dueToday ? 'Due today' : habit.frequency}
+                        </p>
+                      </div>
+                      {dueToday && (
+                        <button
+                          onClick={() => done ? unlogHabit(todayLog!.id) : logHabit(habit.id)}
+                          title={done ? 'Mark incomplete' : 'Mark complete'}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 active:scale-95 ${done ? 'text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600'}`}
+                          style={done ? { backgroundColor: habit.color } : {}}
+                          onMouseEnter={e => { if (!done) (e.currentTarget as HTMLElement).style.backgroundColor = habit.color + '33'; }}
+                          onMouseLeave={e => { if (!done) (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

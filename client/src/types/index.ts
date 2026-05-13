@@ -65,6 +65,29 @@ export interface SummaryResult {
   keyPoints: string[];
 }
 
+export type HabitFrequency = 'daily' | 'weekly';
+
+export interface Habit {
+  id: number;
+  name: string;
+  description: string | null;
+  sectionId: number | null;
+  color: string;
+  icon: string;
+  frequency: HabitFrequency;
+  targetDays: number[];
+  order: number;
+  createdAt: string;
+  archivedAt: string | null;
+}
+
+export interface HabitLog {
+  id: number;
+  habitId: number;
+  completedAt: string;
+  note: string | null;
+}
+
 export interface PomodoroSession {
   id: number;
   taskId: number | null;

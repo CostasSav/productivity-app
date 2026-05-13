@@ -6,6 +6,7 @@ import { CalendarView } from './components/calendar/CalendarView';
 import { SectionPage } from './components/sections/SectionPage';
 import { PomodoroPanel } from './components/PomodoroPanel';
 import { Today } from './pages/Today';
+import { Habits } from './pages/Habits';
 import { useNotes } from './hooks/useNotes';
 import { useTasks } from './hooks/useTasks';
 import { useSections } from './hooks/useSections';
@@ -13,7 +14,7 @@ import { useDarkMode } from './context/DarkModeContext';
 import { api } from './api';
 import type { Note, Task } from './types';
 
-type View = 'today' | 'tasks' | 'calendar' | 'notes' | { type: 'section'; id: number };
+type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | { type: 'section'; id: number };
 
 export default function App() {
   const [view, setView] = useState<View>('today');
@@ -112,6 +113,7 @@ export default function App() {
         {navBtn('tasks', 'Tasks', '✓')}
         {navBtn('calendar', 'Calendar', '▦')}
         {navBtn('notes', 'Notes', '◉')}
+        {navBtn('habits', 'Habits', '🔥')}
 
         {/* Sections */}
         <div className="mt-4 mb-1 px-3">
@@ -183,6 +185,12 @@ export default function App() {
               onCreateTask={createTask}
               onCreateSection={createSection}
             />
+          </div>
+        )}
+
+        {view === 'habits' && (
+          <div className="flex-1 overflow-y-auto">
+            <Habits />
           </div>
         )}
 

@@ -2,9 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTasks } from '../hooks/useTasks';
 import { useSections } from '../hooks/useSections';
 import { usePomodoroSessions } from '../hooks/usePomodoroSessions';
+import { useHabits } from '../hooks/useHabits';
 import { PriorityBadge } from '../components/ui/Badge';
 import { SectionBadge } from '../components/sections/SectionBadge';
 import { Spinner } from '../components/ui/Spinner';
+import { isDue, localDateStr, logToLocalDate, calcCurrentStreak } from '../utils/habitStats';
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const PRIORITY_FALLBACK = { high: '#f87171', medium: '#fbbf24', low: '#4ade80' };
@@ -131,10 +133,51 @@ function SectionHeader({ title, count }) {
   );
 }
 
+function TodayHabitRow({ habit, todayLog, streak, onLog, onUnlog }) {
+  const unitLabel = habit.frequency === 'weekly' ? 'week' : 'day';
+  const done = !!todayLog;
+
+  return (
+    <div className="relative flex items-center gap-3 p-4 rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: habit.color }} />
+      <span className="text-xl leading-none flex-shrink-0">{habit.icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className={`font-medium leading-snug ${done ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>
+          {habit.name}
+        </p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+          {done
+            ? <span className="text-green-600 dark:text-green-400 font-medium">✓ Done today</span>
+            : streak > 0
+              ? `🔥 ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
+              : 'Due today'}
+        </p>
+      </div>
+      <button
+        onClick={() => done ? onUnlog(todayLog.id) : onLog(habit.id)}
+        title={done ? 'Mark incomplete' : 'Mark complete'}
+        className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 active:scale-95 ${
+          done
+            ? 'text-white shadow-sm'
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 hover:border-transparent'
+        }`}
+        style={done ? { backgroundColor: habit.color } : {}}
+        onMouseEnter={e => { if (!done) e.currentTarget.style.backgroundColor = habit.color + '33'; }}
+        onMouseLeave={e => { if (!done) e.currentTarget.style.backgroundColor = ''; }}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function Today({ onFocusTask }) {
   const { tasks, loading, updateTask, toggleSubtask } = useTasks();
   const { sections } = useSections();
   const { totalByTaskId, todayByTaskId } = usePomodoroSessions();
+  const { habits, logs: habitLogs, loading: habitsLoading, logHabit, unlogHabit } = useHabits();
   const [fadingIds, setFadingIds] = useState(new Set());
   const [showToast, setShowToast] = useState(false);
   const toastTimerRef = useRef(null);
@@ -167,6 +210,24 @@ export function Today({ onFocusTask }) {
     return result;
   }, [updateTask]);
 
+  const todayStr = localDateStr();
+  const todayDow = new Date().getDay();
+
+  const habitsToday = habits.filter(h => !h.archivedAt && isDue(h, todayDow));
+
+  const logDatesByHabitId = new Map();
+  const todayLogByHabitId = new Map();
+  habitLogs.forEach(l => {
+    const dateStr = logToLocalDate(l.completedAt);
+    if (!logDatesByHabitId.has(l.habitId)) logDatesByHabitId.set(l.habitId, new Set());
+    logDatesByHabitId.get(l.habitId).add(dateStr);
+    if (dateStr === todayStr && !todayLogByHabitId.has(l.habitId)) {
+      todayLogByHabitId.set(l.habitId, l);
+    }
+  });
+
+  const activeHabitsToday = habitsToday.filter(h => !todayLogByHabitId.has(h.id));
+
   const suggested = tasks
     .filter(t => (t.status !== 'done' || fadingIds.has(t.id)) && !t.pinnedToday && t.deadline && t.deadline <= in3Days)
     .sort((a, b) => {
@@ -181,7 +242,7 @@ export function Today({ onFocusTask }) {
 
   const activeFocusCount = focusList.filter(t => t.status !== 'done').length;
   const activeSuggestedCount = suggested.filter(t => t.status !== 'done').length;
-  const isEmpty = focusList.length === 0 && suggested.length === 0 && !loading;
+  const isEmpty = focusList.length === 0 && suggested.length === 0 && habitsToday.length === 0 && !loading && !habitsLoading;
 
   const handleClearPins = async () => {
     const pinned = tasks.filter(t => t.pinnedToday);
@@ -193,6 +254,7 @@ export function Today({ onFocusTask }) {
   const countParts = [];
   if (activeFocusCount > 0) countParts.push(`${activeFocusCount} ${activeFocusCount === 1 ? 'task' : 'tasks'} in focus`);
   if (activeSuggestedCount > 0) countParts.push(`${activeSuggestedCount} suggested`);
+  if (activeHabitsToday.length > 0) countParts.push(`${activeHabitsToday.length} ${activeHabitsToday.length === 1 ? 'habit' : 'habits'} due`);
 
   const cardProps = task => ({
     task,
@@ -225,7 +287,7 @@ export function Today({ onFocusTask }) {
         )}
       </div>
 
-      {loading && <div className="flex justify-center py-12"><Spinner /></div>}
+      {(loading || habitsLoading) && <div className="flex justify-center py-12"><Spinner /></div>}
 
       {isEmpty && (
         <div className="text-center py-20 text-gray-400 dark:text-gray-500">
@@ -235,7 +297,7 @@ export function Today({ onFocusTask }) {
         </div>
       )}
 
-      {!loading && !isEmpty && (
+      {!loading && !habitsLoading && !isEmpty && (
         <>
           {focusList.length > 0 && (
             <section>
@@ -255,6 +317,28 @@ export function Today({ onFocusTask }) {
                 {suggested.map(task => (
                   <TodayTaskCard key={task.id} {...cardProps(task)} />
                 ))}
+              </div>
+            </section>
+          )}
+
+          {habitsToday.length > 0 && (
+            <section>
+              <SectionHeader title="Habits" count={activeHabitsToday.length} />
+              <div className="space-y-2">
+                {habitsToday.map(habit => {
+                  const logDates = logDatesByHabitId.get(habit.id) ?? new Set();
+                  const streak = calcCurrentStreak(habit, logDates);
+                  return (
+                    <TodayHabitRow
+                      key={habit.id}
+                      habit={habit}
+                      todayLog={todayLogByHabitId.get(habit.id) ?? null}
+                      streak={streak}
+                      onLog={logHabit}
+                      onUnlog={unlogHabit}
+                    />
+                  );
+                })}
               </div>
             </section>
           )}

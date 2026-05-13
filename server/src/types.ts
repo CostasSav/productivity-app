@@ -43,6 +43,29 @@ export interface PomodoroSession {
   type: 'work' | 'break';
 }
 
+export type HabitFrequency = 'daily' | 'weekly';
+
+export interface Habit {
+  id: number;
+  name: string;
+  description: string | null;
+  sectionId: number | null;
+  color: string;
+  icon: string;
+  frequency: HabitFrequency;
+  targetDays: number[]; // day-of-week numbers 0-6; empty for daily
+  order: number;
+  createdAt: string;
+  archivedAt: string | null;
+}
+
+export interface HabitLog {
+  id: number;
+  habitId: number;
+  completedAt: string;
+  note: string | null;
+}
+
 export interface Note {
   id: number;
   title: string;

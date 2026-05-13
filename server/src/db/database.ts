@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType } from '../types';
+import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog } from '../types';
 
 const DB_PATH = path.join(__dirname, '../../data/db.json');
 
@@ -9,13 +9,20 @@ interface DbData {
   tasks: Task[];
   notes: Note[];
   pomodoroSessions: PomodoroSession[];
+  habits: Habit[];
+  habitLogs: HabitLog[];
   _sectionSeq: number;
   _taskSeq: number;
   _noteSeq: number;
   _sessionSeq: number;
+  _habitSeq: number;
+  _habitLogSeq: number;
 }
 
-const EMPTY: DbData = { sections: [], tasks: [], notes: [], pomodoroSessions: [], _sectionSeq: 0, _taskSeq: 0, _noteSeq: 0, _sessionSeq: 0 };
+const EMPTY: DbData = {
+  sections: [], tasks: [], notes: [], pomodoroSessions: [], habits: [], habitLogs: [],
+  _sectionSeq: 0, _taskSeq: 0, _noteSeq: 0, _sessionSeq: 0, _habitSeq: 0, _habitLogSeq: 0,
+};
 
 function load(): DbData {
   try {
@@ -24,6 +31,14 @@ function load(): DbData {
     if (raw._sectionSeq === undefined) raw._sectionSeq = 0;
     if (!raw.pomodoroSessions) raw.pomodoroSessions = [];
     if (raw._sessionSeq === undefined) raw._sessionSeq = 0;
+    if (!raw.habits) raw.habits = [];
+    if (!raw.habitLogs) raw.habitLogs = [];
+    if (raw._habitSeq === undefined) raw._habitSeq = 0;
+    if (raw._habitLogSeq === undefined) raw._habitLogSeq = 0;
+    // Migrate habits that predate the order field
+    if (Array.isArray(raw.habits)) {
+      raw.habits = (raw.habits as any[]).map((h: any, i: number) => (h.order === undefined ? { ...h, order: i } : h));
+    }
     // Migrate tasks that predate subtasks / pinnedToday / pinnedAt
     if (Array.isArray(raw.tasks)) {
       raw.tasks = (raw.tasks as any[]).map((t: any) => ({ subtasks: [], pinnedToday: false, pinnedAt: null, ...t }));
@@ -273,5 +288,70 @@ export const db = {
     data.pomodoroSessions.push(session);
     save(data);
     return session;
+  },
+
+  // ── Habits ───────────────────────────────────────────
+  getHabits(): Habit[] {
+    return load().habits
+      .filter(h => h.archivedAt === null)
+      .sort((a, b) => a.order - b.order);
+  },
+  getArchivedHabits(): Habit[] {
+    return load().habits
+      .filter(h => h.archivedAt !== null)
+      .sort((a, b) => (a.archivedAt! > b.archivedAt! ? -1 : 1));
+  },
+  getHabit(id: number): Habit | undefined {
+    return load().habits.find(h => h.id === id);
+  },
+  createHabit(fields: Omit<Habit, 'id' | 'createdAt' | 'archivedAt' | 'order'>): Habit {
+    const data = load();
+    data._habitSeq += 1;
+    const maxOrder = data.habits.reduce((m, h) => Math.max(m, h.order ?? 0), -1);
+    const habit: Habit = { ...fields, id: data._habitSeq, order: maxOrder + 1, createdAt: now(), archivedAt: null };
+    data.habits.push(habit);
+    save(data);
+    return habit;
+  },
+  updateHabit(id: number, fields: Partial<Omit<Habit, 'id' | 'createdAt'>>): Habit | undefined {
+    const data = load();
+    const idx = data.habits.findIndex(h => h.id === id);
+    if (idx === -1) return undefined;
+    data.habits[idx] = { ...data.habits[idx], ...fields };
+    save(data);
+    return data.habits[idx];
+  },
+  reorderHabits(ids: number[]): void {
+    const data = load();
+    ids.forEach((id, idx) => {
+      const habit = data.habits.find(h => h.id === id);
+      if (habit) habit.order = idx;
+    });
+    save(data);
+  },
+
+  // ── Habit logs ───────────────────────────────────────
+  getHabitLogs(filters?: { habitId?: number; from?: string; to?: string }): HabitLog[] {
+    let logs = load().habitLogs;
+    if (filters?.habitId != null) logs = logs.filter(l => l.habitId === filters.habitId);
+    if (filters?.from) logs = logs.filter(l => l.completedAt >= filters.from!);
+    if (filters?.to) logs = logs.filter(l => l.completedAt <= filters.to!);
+    return [...logs].sort((a, b) => (a.completedAt < b.completedAt ? 1 : -1));
+  },
+  createHabitLog(fields: Omit<HabitLog, 'id'>): HabitLog {
+    const data = load();
+    data._habitLogSeq += 1;
+    const log: HabitLog = { ...fields, id: data._habitLogSeq };
+    data.habitLogs.push(log);
+    save(data);
+    return log;
+  },
+  deleteHabitLog(id: number): boolean {
+    const data = load();
+    const before = data.habitLogs.length;
+    data.habitLogs = data.habitLogs.filter(l => l.id !== id);
+    if (data.habitLogs.length === before) return false;
+    save(data);
+    return true;
   },
 };

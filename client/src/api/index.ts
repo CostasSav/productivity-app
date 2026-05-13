@@ -1,4 +1,4 @@
-import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession } from '../types';
+import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog } from '../types';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -43,6 +43,27 @@ export const api = {
     list: () => request<PomodoroSession[]>('/api/pomodoro-sessions'),
     create: (data: Omit<PomodoroSession, 'id'>) =>
       request<PomodoroSession>('/api/pomodoro-sessions', { method: 'POST', body: JSON.stringify(data) }),
+  },
+  habits: {
+    list: () => request<Habit[]>('/api/habits'),
+    listArchived: () => request<Habit[]>('/api/habits?archived=true'),
+    create: (data: Omit<Habit, 'id' | 'createdAt' | 'archivedAt' | 'order'>) =>
+      request<Habit>('/api/habits', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<Omit<Habit, 'id' | 'createdAt'>>) =>
+      request<Habit>(`/api/habits/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    archive: (id: number) => request<Habit>(`/api/habits/${id}`, { method: 'DELETE' }),
+    reorder: (ids: number[]) => request<void>('/api/habits/reorder', { method: 'PATCH', body: JSON.stringify({ ids }) }),
+    listLogs: (params?: { habitId?: number; from?: string; to?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.habitId != null) q.set('habitId', String(params.habitId));
+      if (params?.from) q.set('from', params.from);
+      if (params?.to) q.set('to', params.to);
+      const qs = q.toString();
+      return request<HabitLog[]>(`/api/habit-logs${qs ? `?${qs}` : ''}`);
+    },
+    createLog: (data: { habitId: number; completedAt?: string; note?: string }) =>
+      request<HabitLog>('/api/habit-logs', { method: 'POST', body: JSON.stringify(data) }),
+    deleteLog: (id: number) => request<void>(`/api/habit-logs/${id}`, { method: 'DELETE' }),
   },
   ai: {
     summarize: (noteId: number) => request<SummaryResult>('/api/ai/summarize', { method: 'POST', body: JSON.stringify({ noteId }) }),
