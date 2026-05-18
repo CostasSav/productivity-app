@@ -11,6 +11,9 @@ const PRIORITY_BORDER: Record<Priority, string> = {
 };
 const PRIORITY_CYCLE: Record<Priority, Priority> = { high: 'medium', medium: 'low', low: 'high' };
 
+// Shared class for icon-only action buttons — meets minimum touch target via padding
+const iconBtn = 'p-2 rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1';
+
 function isOverdue(task: Task): boolean {
   if (!task.deadline || task.status === 'done') return false;
   return task.deadline < new Date().toISOString().split('T')[0];
@@ -75,15 +78,20 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
   return (
     <>
       <div className={`flex items-start gap-3 p-4 rounded-lg border transition-colors
-        ${overdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-750'}
+        ${overdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700'}
         ${task.status === 'done' ? 'opacity-60' : ''}`}>
         <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${overdue ? 'bg-red-500' : PRIORITY_BORDER[task.priority]}`} />
-        <input
-          type="checkbox"
-          checked={task.status === 'done'}
-          onChange={toggleDone}
-          className="mt-1 w-4 h-4 accent-indigo-600 cursor-pointer flex-shrink-0"
-        />
+
+        {/* Checkbox — wrapped for a larger tap target */}
+        <label className="mt-0.5 flex-shrink-0 flex items-center justify-center w-6 h-6 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={task.status === 'done'}
+            onChange={toggleDone}
+            className="w-4 h-4 accent-indigo-600 cursor-pointer"
+          />
+        </label>
+
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>{task.title}</p>
@@ -93,7 +101,11 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
           </div>
           {task.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{task.description}</p>}
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <button onClick={cyclePriority} title="Click to change priority" className="rounded-full hover:opacity-75 transition-opacity">
+            <button
+              onClick={cyclePriority}
+              title="Click to change priority"
+              className="rounded-full hover:opacity-75 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+            >
               <PriorityBadge priority={task.priority} />
             </button>
             <StatusBadge status={task.status} />
@@ -132,9 +144,10 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
                   <span className={`text-xs flex-1 ${sub.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>{sub.title}</span>
                   <button
                     onClick={() => onDeleteSubtask(task.id, sub.id)}
-                    className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-opacity"
+                    aria-label="Delete subtask"
+                    className="opacity-0 group-hover/sub:opacity-100 p-1.5 text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 focus-visible:opacity-100 rounded"
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
               ))}
@@ -149,43 +162,66 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
                     placeholder="Subtask title..."
                     className="flex-1 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500"
                   />
-                  <button onClick={handleAddSubtask} className="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700">Add</button>
-                  <button onClick={() => { setAddingSubtask(false); setNewSubtaskTitle(''); }} className="text-xs px-2 py-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">✕</button>
+                  <button onClick={handleAddSubtask} className="text-xs px-2 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">Add</button>
+                  <button onClick={() => { setAddingSubtask(false); setNewSubtaskTitle(''); }} className="text-xs px-2 py-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded">✕</button>
                 </div>
               )}
             </div>
           )}
           <button
             onClick={() => { setAddingSubtask(true); }}
-            className="mt-2 text-xs text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+            className="mt-2 text-xs text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 rounded"
           >
             + Add subtask
           </button>
         </div>
-        <div className="flex gap-1 flex-shrink-0">
-          {/* Pin to Today */}
+
+        {/* Action buttons */}
+        <div className="flex gap-0.5 flex-shrink-0">
           <button
             onClick={() => onUpdate(task.id, { pinnedToday: !task.pinnedToday })}
-            className={`p-1.5 rounded transition-colors ${task.pinnedToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-200 hover:text-indigo-400 dark:text-gray-600 dark:hover:text-indigo-400'}`}
             title={task.pinnedToday ? 'Unpin from Today' : 'Pin to Today'}
+            className={`${iconBtn} ${task.pinnedToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 hover:text-indigo-400 dark:text-gray-600 dark:hover:text-indigo-400'}`}
           >
-            <svg className="w-4 h-4" fill={task.pinnedToday ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill={task.pinnedToday ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" />
             </svg>
           </button>
+
           {onFocusTask && task.status !== 'done' && (
-            <button onClick={() => onFocusTask(task)} className="p-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded" title="Focus with Pomodoro timer">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <button
+              onClick={() => onFocusTask(task)}
+              title="Focus with Pomodoro timer"
+              className={`${iconBtn} text-gray-300 hover:text-indigo-500 dark:text-gray-600 dark:hover:text-indigo-400`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
             </button>
           )}
-          <button onClick={() => setEditing(true)} className="p-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded" title="Edit">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+
+          <button
+            onClick={() => setEditing(true)}
+            title="Edit task"
+            className={`${iconBtn} text-gray-300 hover:text-indigo-500 dark:text-gray-600 dark:hover:text-indigo-400`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
           </button>
-          <button onClick={() => onDelete(task.id)} className="p-1.5 text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 rounded" title="Delete">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+
+          <button
+            onClick={() => onDelete(task.id)}
+            title="Delete task"
+            className={`${iconBtn} text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </button>
         </div>
       </div>
+
       {editing && (
         <TaskForm
           initial={task}

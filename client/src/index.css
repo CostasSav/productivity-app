@@ -11,7 +11,16 @@
   }
 }
 
-/* Habit completion animations */
+/* ── Reduced-motion: disable all custom animations ──────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .animate-habit-pop,
+  .confetti-particle {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}
+
+/* ── Habit completion animations ─────────────────────────────────────────────── */
 @keyframes habit-pop {
   0%   { transform: scale(1); }
   35%  { transform: scale(1.4); }

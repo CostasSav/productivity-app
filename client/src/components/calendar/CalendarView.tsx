@@ -81,7 +81,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">

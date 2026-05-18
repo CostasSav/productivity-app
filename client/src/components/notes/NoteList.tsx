@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { NoteListItem, Section } from '../../types';
 import { NoteItem } from './NoteItem';
-import { Spinner } from '../ui/Spinner';
 
 interface NoteListProps {
   notes: NoteListItem[];
@@ -13,6 +12,19 @@ interface NoteListProps {
   onNew: () => void;
   onDelete: (id: number) => void;
 }
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+
+function SkeletonNoteItem() {
+  return (
+    <div className="p-3 rounded-lg animate-pulse space-y-1.5">
+      <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-4/5" />
+      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+    </div>
+  );
+}
+
+// ── NoteList ──────────────────────────────────────────────────────────────────
 
 export function NoteList({ notes, sections, loading, selectedId, filterSectionId, onSelect, onNew, onDelete }: NoteListProps) {
   const [sectionFilter, setSectionFilter] = useState<number | null | 'all'>('all');
@@ -27,18 +39,28 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
     <div className="w-72 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full bg-white dark:bg-gray-900">
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="font-semibold text-gray-800 dark:text-gray-100">Notes</h2>
-        <button onClick={onNew} className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 text-lg leading-none" title="New note">+</button>
+        {/* CTA — matches Habits/Tasks button style */}
+        <button
+          onClick={onNew}
+          title="New note"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          New note
+        </button>
       </div>
 
       {filterSectionId === undefined && sections.length > 0 && (
         <div className="px-2 py-2 border-b border-gray-100 dark:border-gray-700 flex flex-wrap gap-1">
           <button onClick={() => setSectionFilter('all')}
-            className={`px-2 py-1 rounded-full text-xs font-medium transition-colors ${sectionFilter === 'all' ? 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
+            className={`px-2 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${sectionFilter === 'all' ? 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
             All
           </button>
           {sections.map(s => (
             <button key={s.id} onClick={() => setSectionFilter(sectionFilter === s.id ? 'all' : s.id)}
-              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer"
               style={sectionFilter === s.id
                 ? { backgroundColor: s.color, color: '#fff' }
                 : { backgroundColor: s.color + '20', color: s.color }}>
@@ -49,10 +71,29 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
       )}
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {loading && <div className="flex justify-center py-8"><Spinner /></div>}
+        {/* Skeleton loading */}
+        {loading && [1, 2, 3, 4].map(i => <SkeletonNoteItem key={i} />)}
+
+        {/* Empty state */}
         {!loading && displayed.length === 0 && (
-          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No notes here.</p>
+          <div className="text-center py-10 px-4">
+            <svg viewBox="0 0 80 80" className="w-16 h-16 mx-auto mb-3" fill="none" aria-hidden>
+              <rect x="12" y="8" width="56" height="64" rx="6" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="2" />
+              <rect x="26" y="4" width="28" height="12" rx="3" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1.5" />
+              <line x1="22" y1="32" x2="58" y2="32" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
+              <line x1="22" y1="44" x2="58" y2="44" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
+              <line x1="22" y1="56" x2="44" y2="56" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">No notes yet</p>
+            <button
+              onClick={onNew}
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+            >
+              Create one
+            </button>
+          </div>
         )}
+
         {displayed.map(note => (
           <NoteItem
             key={note.id}

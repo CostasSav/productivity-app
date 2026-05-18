@@ -3,7 +3,7 @@ import type { Section, Note, Task } from '../../types';
 import { TaskList } from '../tasks/TaskList';
 import { NoteList } from '../notes/NoteList';
 import { NoteEditor } from '../notes/NoteEditor';
-import { useTasks } from '../../hooks/useTasks';
+import { useTasksContext } from '../../context/TasksContext';
 import { useNotes } from '../../hooks/useNotes';
 import { useHabits } from '../../hooks/useHabits';
 import { api } from '../../api';
@@ -26,7 +26,7 @@ const PALETTE = [
 ];
 
 export function SectionPage({ section, sections, onCreateSection, onEditSection, onDeleteSection, onFocusTask }: SectionPageProps) {
-  const { tasks } = useTasks();
+  const { tasks, createTask, updateTask } = useTasksContext();
   const { notes, createNote, updateNoteInList, deleteNote } = useNotes();
   const { habits, logs: habitLogs, logHabit, unlogHabit } = useHabits();
   const [tab, setTab] = useState<'tasks' | 'notes' | 'calendar' | 'habits'>('tasks');
@@ -186,7 +186,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
 
         {tab === 'calendar' && (
           <div className="h-full overflow-y-auto">
-            <CalendarView tasks={tasks} sections={sections} onUpdateTask={(id, data) => api.tasks.update(id, data as Partial<Task>)} onCreateTask={data => api.tasks.create(data as Partial<Task>)} onCreateSection={onCreateSection} filterSectionId={section.id} />
+            <CalendarView tasks={tasks} sections={sections} onUpdateTask={updateTask} onCreateTask={createTask} onCreateSection={onCreateSection} filterSectionId={section.id} />
           </div>
         )}
 

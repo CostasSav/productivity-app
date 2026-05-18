@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useTasks } from '../hooks/useTasks';
+import { useTasksContext } from '../context/TasksContext';
 import { useSections } from '../hooks/useSections';
 import { usePomodoroSessions } from '../hooks/usePomodoroSessions';
 import { useHabits } from '../hooks/useHabits';
@@ -174,7 +174,7 @@ function TodayHabitRow({ habit, todayLog, streak, onLog, onUnlog }) {
 }
 
 export function Today({ onFocusTask }) {
-  const { tasks, loading, updateTask, toggleSubtask } = useTasks();
+  const { tasks, loading, updateTask, toggleSubtask } = useTasksContext();
   const { sections } = useSections();
   const { totalByTaskId, todayByTaskId } = usePomodoroSessions();
   const { habits, logs: habitLogs, loading: habitsLoading, logHabit, unlogHabit } = useHabits();

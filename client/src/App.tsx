@@ -8,7 +8,7 @@ import { PomodoroPanel } from './components/PomodoroPanel';
 import { Today } from './pages/Today';
 import { Habits } from './pages/Habits';
 import { useNotes } from './hooks/useNotes';
-import { useTasks } from './hooks/useTasks';
+import { useTasksContext } from './context/TasksContext';
 import { useSections } from './hooks/useSections';
 import { useDarkMode } from './context/DarkModeContext';
 import { api } from './api';
@@ -16,10 +16,24 @@ import type { Note, Task } from './types';
 
 type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | { type: 'section'; id: number };
 
+// ── Inline SVG icon helper ────────────────────────────────────────────────────
+
+function Icon({ d, d2, className = 'w-4 h-4 flex-shrink-0' }: { d: string; d2?: string; className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+      {d2 && <path strokeLinecap="round" strokeLinejoin="round" d={d2} />}
+    </svg>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const [view, setView] = useState<View>('today');
+  const [collapsed, setCollapsed] = useState(false);
   const { notes, loading: notesLoading, createNote, updateNoteInList, deleteNote } = useNotes();
-  const { tasks, createTask, updateTask } = useTasks();
+  const { tasks, createTask, updateTask } = useTasksContext();
   const { sections, createSection, updateSection, deleteSection } = useSections();
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
@@ -90,76 +104,105 @@ export default function App() {
     return false;
   };
 
-  const navBtn = (v: View, label: string, icon: string) => (
+  const navBtn = (v: View, label: string, icon: React.ReactNode) => (
     <button
       onClick={() => setView(v)}
-      className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+      title={collapsed ? label : undefined}
+      className={`flex items-center w-full rounded-lg text-sm font-medium transition-colors
+        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1
+        ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'}
         ${isActive(v)
           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
           : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
     >
-      <span className="text-lg">{icon}</span> {label}
+      {icon}
+      {!collapsed && label}
     </button>
   );
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
       {/* Sidebar */}
-      <aside className="w-52 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col py-6 px-3 gap-1 overflow-y-auto">
-        <div className="px-3 mb-4">
-          <h1 className="text-base font-bold text-gray-900 dark:text-white">My Workspace</h1>
-        </div>
-        {navBtn('today', 'Today', '☀')}
-        {navBtn('tasks', 'Tasks', '✓')}
-        {navBtn('calendar', 'Calendar', '▦')}
-        {navBtn('notes', 'Notes', '◉')}
-        {navBtn('habits', 'Habits', '🔥')}
+      <aside className={`${collapsed ? 'w-14' : 'w-52'} flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden transition-all duration-300`}>
 
-        {/* Sections */}
-        <div className="mt-4 mb-1 px-3">
-          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Sections</p>
+        {/* Brand mark */}
+        <div className={`flex items-center gap-2.5 mb-4 ${collapsed ? 'justify-center px-1' : 'px-2'}`}>
+          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Icon d="M13 10V3L4 14h7v7l9-11h-7z" className="w-4 h-4 text-white" />
+          </div>
+          {!collapsed && <h1 className="text-sm font-bold text-gray-900 dark:text-white truncate">My Workspace</h1>}
         </div>
-        {sections.map(s => (
+
+        {navBtn('today',    'Today',    <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />)}
+        {navBtn('tasks',    'Tasks',    <Icon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />)}
+        {navBtn('calendar', 'Calendar', <Icon d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />)}
+        {navBtn('notes',    'Notes',    <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
+        {navBtn('habits',   'Habits',   <Icon d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />)}
+
+        {/* Sections — hidden when collapsed */}
+        {!collapsed && (
+          <>
+            <div className="mt-4 mb-1 px-3">
+              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Sections</p>
+            </div>
+            {sections.map(s => (
+              <button
+                key={s.id}
+                onClick={() => setView({ type: 'section', id: s.id })}
+                className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1
+                  ${isActive({ type: 'section', id: s.id })
+                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
+                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+              >
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+                <span className="truncate">{s.name}</span>
+              </button>
+            ))}
+            <button
+              onClick={async () => {
+                const name = prompt('Section name:');
+                if (!name?.trim()) return;
+                const s = await createSection(name.trim(), '#6366f1');
+                setView({ type: 'section', id: s.id });
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-indigo-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+            >
+              <Icon d="M12 4v16m8-8H4" className="w-3.5 h-3.5 flex-shrink-0" />
+              New section
+            </button>
+          </>
+        )}
+
+        {/* Bottom controls */}
+        <div className="mt-auto flex flex-col gap-1 pt-2">
           <button
-            key={s.id}
-            onClick={() => setView({ type: 'section', id: s.id })}
-            className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors
-              ${isActive({ type: 'section', id: s.id })
-                ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
-                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+            onClick={toggle}
+            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className={`flex items-center w-full rounded-lg text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1
+              ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2.5'}`}
           >
-            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-            <span className="truncate">{s.name}</span>
+            {dark
+              ? <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+              : <Icon d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            }
+            {!collapsed && (dark ? 'Light mode' : 'Dark mode')}
           </button>
-        ))}
-        <button
-          onClick={async () => {
-            const name = prompt('Section name:');
-            if (!name?.trim()) return;
-            const s = await createSection(name.trim(), '#6366f1');
-            setView({ type: 'section', id: s.id });
-          }}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-indigo-600 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-indigo-400"
-        >
-          <span className="text-lg">+</span> New section
-        </button>
 
-        {/* Dark mode toggle */}
-        <button
-          onClick={toggle}
-          className="mt-auto flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          {dark ? (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`flex items-center w-full rounded-lg text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1
+              ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2.5'}`}
+          >
+            <svg className={`w-4 h-4 flex-shrink-0 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
             </svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            </svg>
-          )}
-          {dark ? 'Light mode' : 'Dark mode'}
-        </button>
+            {!collapsed && 'Collapse'}
+          </button>
+        </div>
       </aside>
 
       {/* Main */}
@@ -169,75 +212,52 @@ export default function App() {
             <Today onFocusTask={handleFocusTask} />
           </div>
         )}
-
         {view === 'tasks' && (
           <div className="flex-1 overflow-y-auto p-8">
             <TaskList sections={sections} onCreateSection={createSection} onFocusTask={handleFocusTask} />
           </div>
         )}
-
         {view === 'calendar' && (
           <div className="flex-1 overflow-y-auto p-8">
-            <CalendarView
-              tasks={tasks}
-              sections={sections}
-              onUpdateTask={updateTask}
-              onCreateTask={createTask}
-              onCreateSection={createSection}
-            />
+            <CalendarView tasks={tasks} sections={sections} onUpdateTask={updateTask} onCreateTask={createTask} onCreateSection={createSection} />
           </div>
         )}
-
         {view === 'habits' && (
           <div className="flex-1 overflow-y-auto">
             <Habits />
           </div>
         )}
-
         {view === 'notes' && (
           <div className="flex-1 flex overflow-hidden">
             <NoteList
-              notes={notes}
-              sections={sections}
-              loading={notesLoading}
-              selectedId={selectedNoteId}
-              onSelect={id => setSelectedNoteId(id)}
-              onNew={() => handleNewNote()}
-              onDelete={handleDeleteNote}
+              notes={notes} sections={sections} loading={notesLoading}
+              selectedId={selectedNoteId} onSelect={id => setSelectedNoteId(id)}
+              onNew={() => handleNewNote()} onDelete={handleDeleteNote}
             />
             <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-gray-800">
               {activeNote ? (
                 <NoteEditor
-                  key={activeNote.id}
-                  note={activeNote}
-                  sections={sections}
-                  onUpdate={handleUpdateNote}
-                  onTasksAdded={() => {}}
-                  onNoteUpdated={handleNoteUpdated}
-                  onCreateSection={createSection}
+                  key={activeNote.id} note={activeNote} sections={sections}
+                  onUpdate={handleUpdateNote} onTasksAdded={() => {}}
+                  onNoteUpdated={handleNoteUpdated} onCreateSection={createSection}
                 />
               ) : (
                 <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500">
                   <div className="text-center">
                     <p className="text-lg mb-2">No note selected</p>
-                    <button onClick={() => handleNewNote()} className="text-indigo-600 hover:underline text-sm dark:text-indigo-400">Create a new note</button>
+                    <button onClick={() => handleNewNote()} className="text-indigo-600 hover:underline text-sm dark:text-indigo-400 cursor-pointer">Create a new note</button>
                   </div>
                 </div>
               )}
             </div>
           </div>
         )}
-
         {typeof view === 'object' && view.type === 'section' && currentSection && (
           <div className="flex-1 overflow-y-auto p-8">
             <SectionPage
-              key={currentSection.id}
-              section={currentSection}
-              sections={sections}
-              onCreateSection={createSection}
-              onEditSection={handleEditSection}
-              onDeleteSection={handleDeleteSection}
-              onFocusTask={handleFocusTask}
+              key={currentSection.id} section={currentSection} sections={sections}
+              onCreateSection={createSection} onEditSection={handleEditSection}
+              onDeleteSection={handleDeleteSection} onFocusTask={handleFocusTask}
             />
           </div>
         )}
@@ -245,10 +265,8 @@ export default function App() {
 
       {focusTask && (
         <PomodoroPanel
-          task={focusTask}
-          isTimerRunning={isTimerRunning}
-          onRunningChange={setIsTimerRunning}
-          onClose={handleClosePanel}
+          task={focusTask} isTimerRunning={isTimerRunning}
+          onRunningChange={setIsTimerRunning} onClose={handleClosePanel}
         />
       )}
     </div>
