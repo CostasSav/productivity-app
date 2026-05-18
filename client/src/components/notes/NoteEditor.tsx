@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Note, ExtractedTask, SummaryResult, Priority, Section } from '../../types';
 import { api } from '../../api';
@@ -36,13 +36,13 @@ function ExtractedTasksModal({ tasks, onConfirm, onClose }: {
 
   if (tasks.length === 0) {
     return (
-      <Modal title="Extract Tasks" onClose={onClose} footer={<button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>}>
+      <Modal title="Extract Tasks" onClose={onClose} footer={<button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>}>
         <p className="text-gray-500 dark:text-gray-400 text-center py-4">No tasks detected in this note.</p>
       </Modal>
     );
   }
 
-  const inputCls = 'border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100';
+  const inputCls = 'border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100';
 
   return (
     <Modal
@@ -51,7 +51,7 @@ function ExtractedTasksModal({ tasks, onConfirm, onClose }: {
       footer={
         <>
           <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
-          <button onClick={handleConfirm} disabled={saving || checked.every(c => !c)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <button onClick={handleConfirm} disabled={saving || checked.every(c => !c)} className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50">
             {saving ? 'Adding...' : `Add ${checked.filter(Boolean).length} Task${checked.filter(Boolean).length !== 1 ? 's' : ''}`}
           </button>
         </>
@@ -59,10 +59,10 @@ function ExtractedTasksModal({ tasks, onConfirm, onClose }: {
     >
       <div className="space-y-3">
         {editable.map((task, i) => (
-          <div key={i} className={`p-3 rounded-lg border transition-colors
-            ${checked[i] ? 'border-indigo-200 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20' : 'border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-700/30'}`}>
+          <div key={i} className={`p-3 rounded border transition-colors
+            ${checked[i] ? 'border-teal-200 bg-teal-50 dark:border-teal-700 dark:bg-teal-900/20' : 'border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-700/30'}`}>
             <div className="flex items-start gap-3">
-              <input type="checkbox" checked={checked[i]} onChange={() => setChecked(prev => prev.map((c, idx) => idx === i ? !c : c))} className="mt-1 accent-indigo-600 cursor-pointer" />
+              <input type="checkbox" checked={checked[i]} onChange={() => setChecked(prev => prev.map((c, idx) => idx === i ? !c : c))} className="mt-1 accent-teal-600 cursor-pointer" />
               <div className="flex-1 space-y-2">
                 <input value={task.title} onChange={e => updateTask(i, { title: e.target.value })}
                   className={`w-full text-sm ${inputCls}`} />
@@ -77,10 +77,10 @@ function ExtractedTasksModal({ tasks, onConfirm, onClose }: {
                     className={`text-xs ${inputCls}`} />
                 </div>
                 {task.subtasks.length > 0 && (
-                  <div className="pl-2 border-l-2 border-indigo-200 dark:border-indigo-700 space-y-1">
+                  <div className="pl-2 border-l-2 border-teal-200 dark:border-teal-700 space-y-1">
                     {task.subtasks.map((sub, si) => (
                       <div key={si} className="flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 dark:bg-indigo-500 flex-shrink-0" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-300 dark:bg-teal-500 flex-shrink-0" />
                         <input
                           value={sub}
                           onChange={e => {
@@ -261,7 +261,7 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
   return (
     <div className="flex flex-col h-full relative">
       {toast && (
-        <div className="absolute top-4 right-4 z-40 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+        <div className="absolute top-4 right-4 z-40 bg-green-600 text-white px-4 py-2 rounded shadow-lg text-sm">
           {toast}
         </div>
       )}
@@ -298,16 +298,16 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
       </div>
 
       {aiError && (
-        <div className="mx-6 mb-2 px-3 py-2 bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">{aiError}</div>
+        <div className="mx-6 mb-2 px-3 py-2 bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800 rounded text-sm text-red-600 dark:text-red-400">{aiError}</div>
       )}
 
       {summaryResult && (
-        <div className="mx-6 mb-3 p-4 bg-indigo-50 border border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800 rounded-lg">
-          <h4 className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase mb-1">AI Summary</h4>
+        <div className="mx-6 mb-3 p-4 bg-teal-50 border border-teal-200 dark:bg-teal-900/20 dark:border-teal-800 rounded">
+          <h4 className="text-xs font-semibold text-teal-600 dark:text-teal-400 uppercase mb-1">AI Summary</h4>
           <p className="text-sm text-gray-700 dark:text-gray-200 mb-2">{summaryResult.summary}</p>
           <ul className="space-y-0.5">
             {summaryResult.keyPoints.map((kp, i) => (
-              <li key={i} className="text-xs text-gray-600 dark:text-gray-300 flex gap-1"><span className="text-indigo-400">•</span>{kp}</li>
+              <li key={i} className="text-xs text-gray-600 dark:text-gray-300 flex gap-1"><span className="text-teal-400">â€¢</span>{kp}</li>
             ))}
           </ul>
         </div>
@@ -315,15 +315,15 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
 
       <div className="px-6 pb-4 flex gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
         <button onClick={handleSummarize} disabled={summarizing || contentTooShort}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40"
+          className="flex items-center gap-2 px-3 py-2 text-sm bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-40"
           title={contentTooShort ? 'Note too short to summarize' : undefined}>
-          {summarizing ? <Spinner size="sm" /> : '✦'}
+          {summarizing ? <Spinner size="sm" /> : 'âœ¦'}
           {summaryResult ? 'Re-summarize' : 'Summarize'}
         </button>
         <button onClick={handleExtract} disabled={extracting || contentTooShort}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-40"
+          className="flex items-center gap-2 px-3 py-2 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40"
           title={contentTooShort ? 'Note too short for task extraction' : undefined}>
-          {extracting ? <Spinner size="sm" /> : '⊕'}
+          {extracting ? <Spinner size="sm" /> : 'âŠ•'}
           Extract Tasks
         </button>
       </div>
@@ -334,3 +334,4 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
     </div>
   );
 }
+

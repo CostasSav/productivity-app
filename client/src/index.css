@@ -45,7 +45,7 @@
   height: 7px;
   border-radius: 50%;
   margin: -3.5px 0 0 -3.5px;
-  background-color: var(--color, #6366f1);
+  background-color: var(--color, #0D9488);
   animation: confetti-fly 0.5s ease-out forwards;
   pointer-events: none;
 }

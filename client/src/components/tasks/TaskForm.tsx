@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { Task, Priority, TaskStatus, RecurrenceType, Section } from '../../types';
 import { Modal } from '../ui/Modal';
 import { SectionSelector } from '../sections/SectionSelector';
@@ -24,7 +24,7 @@ function nextWeekdayDate(dayIndex: number): string {
   return d.toISOString().split('T')[0];
 }
 
-const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500';
+const inputCls = 'w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500';
 const labelCls = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
 
 export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }: TaskFormProps) {
@@ -91,7 +91,7 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
       footer={
         <>
           <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+          <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50">
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Task'}
           </button>
         </>
@@ -139,7 +139,7 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
           <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className={inputCls} />
         </div>
 
-        <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-3">
+        <div className="border border-gray-200 dark:border-gray-600 rounded p-3 space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Recurrence</label>
             <span className="text-xs text-gray-400 dark:text-gray-500">auto-renews when done</span>
@@ -148,7 +148,7 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
             {(['', 'daily', 'weekly', 'monthly'] as const).map(t => (
               <button key={t} type="button" onClick={() => handleRecurrenceTypeChange(t as RecurrenceType | '')}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors
-                  ${recurrence === t ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
+                  ${recurrence === t ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
                 {t === '' ? 'None' : t}
               </button>
             ))}
@@ -160,7 +160,7 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
                 {DAYS.map((day, i) => (
                   <button key={day} type="button" onClick={() => handleDayClick(i)}
                     className={`w-9 h-9 rounded-full text-xs font-medium transition-colors
-                      ${recurrenceDay === i ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
+                      ${recurrenceDay === i ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
                     {day}
                   </button>
                 ))}
@@ -172,7 +172,7 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Day of month</p>
               <input type="number" min={1} max={31} value={recurrenceDay ?? 1}
                 onChange={e => setRecurrenceDay(Number(e.target.value))}
-                className="w-20 border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
+                className="w-20 border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
             </div>
           )}
           {recurrence && (
@@ -188,3 +188,4 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
     </Modal>
   );
 }
+

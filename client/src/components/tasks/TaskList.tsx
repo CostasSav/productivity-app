@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { Task, Priority, Section } from '../../types';
 import { TaskItem } from './TaskItem';
 import { TaskForm } from './TaskForm';
@@ -13,11 +13,11 @@ interface TaskListProps {
   onFocusTask?: (task: Task) => void;
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+// â”€â”€ Skeleton â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SkeletonTaskItem() {
   return (
-    <div className="flex items-start gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse">
+    <div className="flex items-start gap-3 p-4 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse">
       <div className="w-4 h-4 mt-1 rounded bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
       <div className="flex-1 space-y-2">
         <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
@@ -27,35 +27,22 @@ function SkeletonTaskItem() {
         </div>
       </div>
       <div className="flex gap-1">
-        <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-        <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+        <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded" />
+        <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded" />
       </div>
     </div>
   );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
+// â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function TasksEmptyState({ onNew }: { onNew: () => void }) {
   return (
     <div className="text-center py-16">
-      <svg viewBox="0 0 140 140" className="w-36 h-36 mx-auto mb-6" fill="none" aria-hidden>
-        {/* Clipboard */}
-        <rect x="25" y="28" width="90" height="100" rx="10" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="2.5" />
-        <rect x="48" y="18" width="44" height="20" rx="5" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="2" />
-        {/* Lines */}
-        <line x1="42" y1="62" x2="98" y2="62" stroke="#e2e8f0" strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="42" y1="84" x2="98" y2="84" stroke="#e2e8f0" strokeWidth="2.5" strokeLinecap="round" />
-        <line x1="42" y1="106" x2="98" y2="106" stroke="#e2e8f0" strokeWidth="2.5" strokeLinecap="round" />
-        {/* Check 1 */}
-        <circle cx="42" cy="62" r="7" fill="#eef2ff" stroke="#6366f1" strokeWidth="2" />
-        <path d="M38.5 62l2.5 2.5 5-5" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Empty rows */}
-        <circle cx="42" cy="84" r="7" fill="none" stroke="#e2e8f0" strokeWidth="2" />
-        <circle cx="42" cy="106" r="7" fill="none" stroke="#e2e8f0" strokeWidth="2" />
-        {/* + badge */}
-        <circle cx="105" cy="38" r="14" fill="#6366f1" />
-        <path d="M105 32v12M99 38h12" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+      <svg viewBox="0 0 80 80" className="w-20 h-20 mx-auto mb-6" fill="none" aria-hidden>
+        <rect x="8" y="8" width="64" height="64" rx="4" stroke="#e2e8f0" strokeWidth="3" className="dark:stroke-gray-600" />
+        <line x1="20" y1="32" x2="60" y2="32" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" className="dark:stroke-gray-600" />
+        <line x1="20" y1="48" x2="44" y2="48" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" className="dark:stroke-gray-600" />
       </svg>
       <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-1">No tasks yet</h2>
       <p className="text-sm text-gray-400 dark:text-gray-500 mb-6 max-w-xs mx-auto">
@@ -63,7 +50,7 @@ function TasksEmptyState({ onNew }: { onNew: () => void }) {
       </p>
       <button
         onClick={onNew}
-        className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+        className="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 text-white text-sm font-medium rounded hover:bg-orange-600 transition-colors shadow-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -74,13 +61,13 @@ function TasksEmptyState({ onNew }: { onNew: () => void }) {
   );
 }
 
-// ── TaskList ──────────────────────────────────────────────────────────────────
+// â”€â”€ TaskList â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function TaskList({ sections, onCreateSection, filterSectionId, title = 'Tasks', onFocusTask }: TaskListProps) {
   const { tasks, loading, error, createTask, updateTask, deleteTask, addSubtask, toggleSubtask, deleteSubtask } = useTasksContext();
   const { totalByTaskId: pomodoroCountByTaskId } = usePomodoroSessions();
   const [showForm, setShowForm] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('active');
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all');
   const [sectionFilter, setSectionFilter] = useState<number | null | 'all'>(
     filterSectionId !== undefined ? filterSectionId : 'all'
@@ -105,7 +92,7 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
   const defaultSectionId = filterSectionId !== undefined ? filterSectionId :
     (sectionFilter !== 'all' ? sectionFilter : null);
 
-  const filterBtnBase = 'px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
+  const filterBtnBase = 'px-3 py-1.5 rounded-md text-sm font-medium capitalize transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500';
   const filterActive = 'bg-white shadow text-gray-900 dark:bg-gray-600 dark:text-white';
   const filterInactive = 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200';
 
@@ -123,7 +110,7 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+          className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -134,7 +121,7 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {/* Status filter */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded p-1">
           {(['all', 'active', 'done'] as const).map(f => (
             <button key={f} onClick={() => setStatusFilter(f)}
               className={`${filterBtnBase} ${statusFilter === f ? filterActive : filterInactive}`}>
@@ -144,7 +131,7 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
         </div>
 
         {/* Priority filter */}
-        <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded p-1">
           <button onClick={() => setPriorityFilter('all')}
             className={`${filterBtnBase} text-xs ${priorityFilter === 'all' ? filterActive : filterInactive}`}>
             All
@@ -217,3 +204,4 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
     </div>
   );
 }
+

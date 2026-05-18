@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+﻿import { useState, useRef, useCallback } from 'react';
 import { useHabits } from '../hooks/useHabits';
 import { useSections } from '../hooks/useSections';
 import { Spinner } from '../components/ui/Spinner';
@@ -10,9 +10,9 @@ import {
   isDue, isWeekFullyComplete, calcCurrentStreak, calcLongestStreak, calcRate30,
 } from '../utils/habitStats';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-const EMOJIS = ['💧','🏃‍♂️','📚','🧘‍♀️','💪','🥗','😴','✍️','🎯','🧹','💊','🚴','🍎','🧠','🎨','🎸','🌿','☀️','🚶','💤'];
+const EMOJIS = ['ðŸ’§','ðŸƒâ€â™‚ï¸','ðŸ"š','ðŸ§˜â€â™€ï¸','ðŸ’ª','ðŸ¥—','ðŸ˜´','âœï¸','ðŸŽ¯','ðŸ§¹','ðŸ’Š','ðŸš´','ðŸŽ','ðŸ§ ','ðŸŽ¨','ðŸŽ¸','ðŸŒ¿','â˜€ï¸','ðŸš¶','ðŸ’¤'];
 const PALETTE = ['#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#3b82f6','#64748b'];
 const WEEK_DAYS = [
   { label: 'Mon', value: 1 },
@@ -25,10 +25,10 @@ const WEEK_DAYS = [
 ];
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500';
+const inputCls = 'w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500';
 const labelCls = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
 
-// ── StatsPanel ────────────────────────────────────────────────────────────────
+// â"€â"€ StatsPanel â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function StatsPanel({ habit, logDates }) {
   const today = localDateStr();
@@ -48,9 +48,9 @@ function StatsPanel({ habit, logDates }) {
   const colLabels = last28.slice(0, 7).map(d => DAY_LABELS[d.dow]);
 
   const statCell = (label, value) => (
-    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2.5">
+    <div className="bg-gray-50 dark:bg-gray-700/50 rounded p-2.5">
       <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{label}</p>
-      <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{value}</p>
+      <p className="text-sm font-semibold font-mono text-gray-800 dark:text-gray-100">{value}</p>
     </div>
   );
 
@@ -59,14 +59,14 @@ function StatsPanel({ habit, logDates }) {
       <div className="grid grid-cols-2 gap-2">
         {statCell(
           'Current streak',
-          current > 0 ? `🔥 ${current} ${unitLabel}${current !== 1 ? 's' : ''}` : '—',
+          current > 0 ? `ðŸ"¥ ${current} ${unitLabel}${current !== 1 ? 's' : ''}` : 'â€"',
         )}
         {statCell(
           'Longest streak',
-          longest > 0 ? `${longest} ${unitLabel}${longest !== 1 ? 's' : ''}` : '—',
+          longest > 0 ? `${longest} ${unitLabel}${longest !== 1 ? 's' : ''}` : 'â€"',
         )}
-        {statCell('Total completions', total > 0 ? total : '—')}
-        {statCell('Last 30 days', rate !== null ? `${rate}%` : '—')}
+        {statCell('Total completions', total > 0 ? total : 'â€"')}
+        {statCell('Last 30 days', rate !== null ? `${rate}%` : 'â€"')}
       </div>
 
       <div>
@@ -105,7 +105,7 @@ function StatsPanel({ habit, logDates }) {
   );
 }
 
-// ── HabitForm ─────────────────────────────────────────────────────────────────
+// â"€â"€ HabitForm â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onClose }) {
   const isEdit = !!initial;
@@ -175,13 +175,13 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
                 <span className="text-xs text-red-600 dark:text-red-400">Archive this habit?</span>
                 <button
                   onClick={handleArchive} disabled={archiving}
-                  className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
                 >
-                  {archiving ? 'Archiving…' : 'Yes, archive'}
+                  {archiving ? 'Archivingâ€¦' : 'Yes, archive'}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
-                  className="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                  className="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
                 >
                   Cancel
                 </button>
@@ -201,9 +201,9 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
             </button>
             <button
               onClick={handleSubmit} disabled={saving}
-              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
             >
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Habit'}
+              {saving ? 'Savingâ€¦' : isEdit ? 'Save Changes' : 'Create Habit'}
             </button>
           </div>
         </div>
@@ -217,21 +217,21 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
           <input
             autoFocus value={name} onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-            className={inputCls} placeholder="e.g. Drink water, Read 20 pages…"
+            className={inputCls} placeholder="e.g. Drink water, Read 20 pagesâ€¦"
           />
         </div>
 
         <div>
           <label className={labelCls}>Description</label>
-          <input value={description} onChange={e => setDescription(e.target.value)} className={inputCls} placeholder="Optional notes…" />
+          <input value={description} onChange={e => setDescription(e.target.value)} className={inputCls} placeholder="Optional notesâ€¦" />
         </div>
 
         <div>
           <label className={labelCls}>Icon</label>
-          <div className="grid grid-cols-10 gap-1 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+          <div className="grid grid-cols-10 gap-1 p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
             {EMOJIS.map(e => (
               <button key={e} type="button" onClick={() => setIcon(e)}
-                className={`text-xl p-1.5 rounded-lg transition-colors leading-none ${icon === e ? 'bg-white dark:bg-gray-600 ring-2 ring-indigo-500 shadow-sm' : 'hover:bg-white dark:hover:bg-gray-600'}`}
+                className={`text-xl p-1.5 rounded transition-colors leading-none ${icon === e ? 'bg-white dark:bg-gray-600 ring-2 ring-teal-500 shadow-sm' : 'hover:bg-white dark:hover:bg-gray-600'}`}
               >
                 {e}
               </button>
@@ -256,7 +256,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
           <div className="flex gap-2">
             {['daily', 'weekly'].map(f => (
               <button key={f} type="button" onClick={() => handleFrequencyChange(f)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${frequency === f ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
+                className={`px-4 py-2 rounded text-sm font-medium capitalize transition-colors ${frequency === f ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
               >
                 {f}
               </button>
@@ -268,7 +268,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
               <div className="flex gap-1.5 flex-wrap">
                 {WEEK_DAYS.map(({ label, value }) => (
                   <button key={value} type="button" onClick={() => toggleDay(value)}
-                    className={`w-10 h-10 rounded-full text-xs font-medium transition-colors ${targetDays.includes(value) ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
+                    className={`w-10 h-10 rounded-full text-xs font-medium transition-colors ${targetDays.includes(value) ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
                   >
                     {label}
                   </button>
@@ -287,7 +287,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
   );
 }
 
-// ── HabitCard ─────────────────────────────────────────────────────────────────
+// â"€â"€ HabitCard â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function HabitCard({
   habit, logs, onLog, onUnlog, onEdit,
@@ -333,9 +333,9 @@ function HabitCard({
       onDrop={(e) => { e.preventDefault(); onDrop(habit.id); }}
       onDragEnd={() => { onDragEnd(); setTimeout(() => { wasDragging.current = false; }, 50); }}
       onClick={() => { if (!wasDragging.current) setExpanded(e => !e); }}
-      className={`bg-white dark:bg-gray-800 rounded-xl border flex flex-col gap-4 p-5 cursor-pointer select-none transition-all duration-200
+      className={`bg-white dark:bg-gray-800 rounded border flex flex-col gap-4 p-5 cursor-pointer select-none transition-all duration-200
         ${isDragging ? 'opacity-40 scale-95' : ''}
-        ${isDragOver ? 'ring-2 ring-indigo-400 border-indigo-300' : 'border-gray-200 dark:border-gray-700 hover:shadow-md'}
+        ${isDragOver ? 'ring-2 ring-teal-400 border-teal-300' : 'border-gray-200 dark:border-gray-700 hover:shadow-md'}
       `}
     >
       {/* Header */}
@@ -353,7 +353,7 @@ function HabitCard({
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100 leading-snug truncate">{habit.name}</h3>
           {streak > 0 ? (
-            <p className="text-xs font-medium text-orange-500 mt-0.5">🔥 {streak} {unitLabel}{streak !== 1 ? 's' : ''}</p>
+            <p className="text-xs font-medium text-orange-500 mt-0.5">ðŸ"¥ {streak} {unitLabel}{streak !== 1 ? 's' : ''}</p>
           ) : (
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No streak yet</p>
           )}
@@ -437,11 +437,11 @@ function HabitCard({
   );
 }
 
-// ── ArchivedHabitCard ─────────────────────────────────────────────────────────
+// â"€â"€ ArchivedHabitCard â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function ArchivedHabitCard({ habit, onRestore }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3 opacity-50 hover:opacity-70 transition-opacity">
+    <div className="bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3 opacity-50 hover:opacity-70 transition-opacity">
       <div className="w-1.5 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: habit.color }} />
       <span className="text-2xl leading-none flex-shrink-0">{habit.icon}</span>
       <div className="flex-1 min-w-0">
@@ -450,7 +450,7 @@ function ArchivedHabitCard({ habit, onRestore }) {
       </div>
       <button
         onClick={() => onRestore(habit.id)}
-        className="flex-shrink-0 px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-600 hover:border-indigo-500 dark:hover:text-indigo-400 dark:hover:border-indigo-500 transition-colors"
+        className="flex-shrink-0 px-3 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded text-gray-500 dark:text-gray-400 hover:text-teal-600 hover:border-teal-500 dark:hover:text-teal-400 dark:hover:border-teal-500 transition-colors"
       >
         Restore
       </button>
@@ -458,30 +458,17 @@ function ArchivedHabitCard({ habit, onRestore }) {
   );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
+// â"€â"€ Empty state â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function HabitsEmptyState({ onCreate }) {
   return (
     <div className="text-center py-16">
-      <svg viewBox="0 0 140 140" className="w-36 h-36 mx-auto mb-6" fill="none" aria-hidden>
-        {/* Clipboard body */}
-        <rect x="25" y="28" width="90" height="100" rx="10" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="2.5" className="dark:fill-gray-700/50 dark:stroke-gray-600" />
-        {/* Clip */}
-        <rect x="48" y="18" width="44" height="20" rx="5" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="2" className="dark:fill-gray-600 dark:stroke-gray-500" />
-        {/* Rows */}
-        <line x1="42" y1="62" x2="98" y2="62" stroke="#e2e8f0" strokeWidth="2.5" strokeLinecap="round" className="dark:stroke-gray-600" />
-        <line x1="42" y1="84" x2="98" y2="84" stroke="#e2e8f0" strokeWidth="2.5" strokeLinecap="round" className="dark:stroke-gray-600" />
-        <line x1="42" y1="106" x2="98" y2="106" stroke="#e2e8f0" strokeWidth="2.5" strokeLinecap="round" className="dark:stroke-gray-600" />
-        {/* Check 1 (indigo) */}
-        <circle cx="42" cy="62" r="7" fill="#eef2ff" stroke="#6366f1" strokeWidth="2" />
-        <path d="M38.5 62l2.5 2.5 5-5" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Check 2 (purple) */}
-        <circle cx="42" cy="84" r="7" fill="#f5f3ff" stroke="#8b5cf6" strokeWidth="2" />
-        <path d="M38.5 84l2.5 2.5 5-5" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Empty row 3 */}
-        <circle cx="42" cy="106" r="7" fill="none" stroke="#e2e8f0" strokeWidth="2" className="dark:stroke-gray-600" />
-        {/* Flame */}
-        <text x="105" y="38" fontSize="22" textAnchor="middle">🔥</text>
+      <svg viewBox="0 0 80 80" className="w-20 h-20 mx-auto mb-6" fill="none" aria-hidden>
+        <rect x="8" y="8" width="64" height="64" rx="4" stroke="#e2e8f0" strokeWidth="3" className="dark:stroke-gray-600" />
+        <line x1="20" y1="32" x2="60" y2="32" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" className="dark:stroke-gray-600" />
+        <line x1="20" y1="48" x2="60" y2="48" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" className="dark:stroke-gray-600" />
+        <circle cx="40" cy="40" r="12" stroke="#14b8a6" strokeWidth="3" />
+        <path d="M34 40l4 4 8-8" stroke="#14b8a6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
 
       <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-1">Build your first habit</h2>
@@ -490,7 +477,7 @@ function HabitsEmptyState({ onCreate }) {
       </p>
       <button
         onClick={onCreate}
-        className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+        className="inline-flex items-center gap-2 px-5 py-2.5 bg-teal-600 text-white text-sm font-medium rounded hover:bg-teal-700 transition-colors shadow-sm"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -501,7 +488,7 @@ function HabitsEmptyState({ onCreate }) {
   );
 }
 
-// ── Habits page ───────────────────────────────────────────────────────────────
+// â"€â"€ Habits page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export function Habits() {
   const { habits, logs, loading, createHabit, updateHabit, archiveHabit, reorderHabits, logHabit, unlogHabit, reload } = useHabits();
@@ -578,7 +565,7 @@ export function Habits() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Habits</h1>
         <button
           onClick={() => setFormTarget(undefined)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded hover:bg-teal-700 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -658,3 +645,4 @@ export function Habits() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTasksContext } from '../context/TasksContext';
 import { useSections } from '../hooks/useSections';
 import { usePomodoroSessions } from '../hooks/usePomodoroSessions';
@@ -42,7 +42,7 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
     : 'opacity-100';
 
   return (
-    <div className={`relative flex items-start gap-3 p-4 rounded-lg border transition-all duration-700
+    <div className={`relative flex items-start gap-3 p-4 rounded border transition-all duration-700
       ${overdue && !isDone ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'}
       ${visibilityClass}`}>
 
@@ -52,7 +52,7 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
         type="checkbox"
         checked={isDone}
         onChange={() => onUpdate(task.id, { status: isDone ? 'todo' : 'done' })}
-        className="mt-1 w-4 h-4 accent-indigo-600 cursor-pointer flex-shrink-0"
+        className="mt-1 w-4 h-4 accent-teal-600 cursor-pointer flex-shrink-0"
       />
 
       <div className="flex-1 min-w-0">
@@ -64,14 +64,14 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
           <PriorityBadge priority={task.priority} />
           {section && <SectionBadge section={section} />}
           {task.deadline && (
-            <span className={`text-xs font-medium ${overdue && !isDone ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-              {overdue && !isDone ? '⚠ Overdue: ' : 'Due: '}{formatDeadline(task.deadline)}
+            <span className={`text-xs font-medium font-mono tabular-nums ${overdue && !isDone ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+              {overdue && !isDone ? 'âš  Overdue: ' : 'Due: '}{formatDeadline(task.deadline)}
             </span>
           )}
           {pomodoroCount > 0 && (
             <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1"
               title={`${pomodoroCount} total Pomodoro session${pomodoroCount !== 1 ? 's' : ''}${pomodoroTodayCount > 0 ? `, ${pomodoroTodayCount} today` : ''}`}>
-              🍅 {pomodoroCount}
+              ðŸ… {pomodoroCount}
               {pomodoroTodayCount > 0 && (
                 <span className="text-gray-300 dark:text-gray-600">({pomodoroTodayCount} today)</span>
               )}
@@ -84,7 +84,7 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
             <div className="flex items-center gap-2 mb-1.5">
               <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-indigo-400 rounded-full transition-all"
+                  className="h-full bg-teal-400 rounded-full transition-all"
                   style={{ width: `${(doneCount / totalCount) * 100}%` }}
                 />
               </div>
@@ -96,7 +96,7 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
                   type="checkbox"
                   checked={sub.status === 'done'}
                   onChange={e => onToggleSubtask(task.id, sub.id, e.target.checked)}
-                  className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer flex-shrink-0"
+                  className="w-3.5 h-3.5 accent-teal-600 cursor-pointer flex-shrink-0"
                 />
                 <span className={`text-xs ${sub.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>
                   {sub.title}
@@ -110,7 +110,7 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
       {!isDone && onFocusTask && (
         <button
           onClick={() => onFocusTask(task)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-full hover:bg-indigo-700 font-medium flex-shrink-0 transition-colors shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs rounded-full hover:bg-teal-700 font-medium flex-shrink-0 transition-colors shadow-sm"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -138,7 +138,7 @@ function TodayHabitRow({ habit, todayLog, streak, onLog, onUnlog }) {
   const done = !!todayLog;
 
   return (
-    <div className="relative flex items-center gap-3 p-4 rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+    <div className="relative flex items-center gap-3 p-4 rounded border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
       <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: habit.color }} />
       <span className="text-xl leading-none flex-shrink-0">{habit.icon}</span>
       <div className="flex-1 min-w-0">
@@ -147,9 +147,9 @@ function TodayHabitRow({ habit, todayLog, streak, onLog, onUnlog }) {
         </p>
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
           {done
-            ? <span className="text-green-600 dark:text-green-400 font-medium">✓ Done today</span>
+            ? <span className="text-green-600 dark:text-green-400 font-medium">âœ“ Done today</span>
             : streak > 0
-              ? `🔥 ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
+              ? `ðŸ”¥ ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
               : 'Due today'}
         </p>
       </div>
@@ -271,9 +271,9 @@ export function Today({ onFocusTask }) {
     <div className="max-w-2xl mx-auto px-1 py-8 space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{formatHeadingDate()}</h1>
+          <h1 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">{formatHeadingDate()}</h1>
           {countParts.length > 0 && (
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">{countParts.join(' · ')}</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">{countParts.join(' Â· ')}</p>
           )}
         </div>
         {tasks.some(t => t.pinnedToday) && (
@@ -291,7 +291,7 @@ export function Today({ onFocusTask }) {
 
       {isEmpty && (
         <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-          <p className="text-4xl mb-4">🌿</p>
+          <p className="text-4xl mb-4">ðŸŒ¿</p>
           <p className="text-base font-medium text-gray-500 dark:text-gray-400">Nothing due soon.</p>
           <p className="text-sm mt-1">Pin tasks to build your focus list.</p>
         </div>
@@ -347,11 +347,12 @@ export function Today({ onFocusTask }) {
 
       {/* Session complete toast */}
       <div className={`fixed bottom-6 left-6 z-50 transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-        <div className="flex items-center gap-2.5 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-xl text-sm font-medium">
-          <span className="text-base">🍅</span>
+        <div className="flex items-center gap-2.5 bg-gray-900 text-white px-4 py-3 rounded shadow-xl text-sm font-medium">
+          <span className="text-base">ðŸ…</span>
           Session complete! Take a 5-min break.
         </div>
       </div>
     </div>
   );
 }
+

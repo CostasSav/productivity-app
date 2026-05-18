@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+﻿import { useState, useRef } from 'react';
 import type { Task, Priority, Section } from '../../types';
 import { PriorityBadge, StatusBadge } from '../ui/Badge';
 import { SectionBadge } from '../sections/SectionBadge';
@@ -11,8 +11,8 @@ const PRIORITY_BORDER: Record<Priority, string> = {
 };
 const PRIORITY_CYCLE: Record<Priority, Priority> = { high: 'medium', medium: 'low', low: 'high' };
 
-// Shared class for icon-only action buttons — meets minimum touch target via padding
-const iconBtn = 'p-2 rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1';
+// Shared class for icon-only action buttons â€” meets minimum touch target via padding
+const iconBtn = 'p-2 rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1';
 
 function isOverdue(task: Task): boolean {
   if (!task.deadline || task.status === 'done') return false;
@@ -77,18 +77,18 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
 
   return (
     <>
-      <div className={`flex items-start gap-3 p-4 rounded-lg border transition-colors
+      <div className={`flex items-start gap-3 p-4 rounded border transition-colors
         ${overdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700'}
         ${task.status === 'done' ? 'opacity-60' : ''}`}>
         <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${overdue ? 'bg-red-500' : PRIORITY_BORDER[task.priority]}`} />
 
-        {/* Checkbox — wrapped for a larger tap target */}
+        {/* Checkbox â€” wrapped for a larger tap target */}
         <label className="mt-0.5 flex-shrink-0 flex items-center justify-center w-6 h-6 cursor-pointer">
           <input
             type="checkbox"
             checked={task.status === 'done'}
             onChange={toggleDone}
-            className="w-4 h-4 accent-indigo-600 cursor-pointer"
+            className="w-4 h-4 accent-teal-600 cursor-pointer"
           />
         </label>
 
@@ -96,7 +96,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
           <div className="flex items-center gap-2 flex-wrap">
             <p className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>{task.title}</p>
             {recurLabel && (
-              <span className="text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 px-2 py-0.5 rounded-full font-medium flex-shrink-0">↻ {recurLabel}</span>
+              <span className="text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 px-2 py-0.5 rounded-full font-medium flex-shrink-0"><svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> {recurLabel}</span>
             )}
           </div>
           {task.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{task.description}</p>}
@@ -104,20 +104,20 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
             <button
               onClick={cyclePriority}
               title="Click to change priority"
-              className="rounded-full hover:opacity-75 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+              className="rounded-full hover:opacity-75 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
             >
               <PriorityBadge priority={task.priority} />
             </button>
             <StatusBadge status={task.status} />
             {section && <SectionBadge section={section} />}
             {task.deadline && (
-              <span className={`text-xs font-medium ${overdue ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                {overdue ? '⚠ Overdue: ' : 'Due: '}{formatDate(task.deadline)}
+              <span className={`text-xs font-medium font-mono tabular-nums ${overdue ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                {overdue ? 'âš  Overdue: ' : 'Due: '}{formatDate(task.deadline)}
               </span>
             )}
             {pomodoroCount > 0 && (
               <span className="text-xs text-gray-400 dark:text-gray-500" title={`${pomodoroCount} Pomodoro session${pomodoroCount !== 1 ? 's' : ''} logged`}>
-                🍅 {pomodoroCount}
+                ðŸ… {pomodoroCount}
               </span>
             )}
           </div>
@@ -128,7 +128,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
               {totalCount > 0 && (
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-                    <div className="h-full bg-indigo-400 rounded-full transition-all" style={{ width: `${(doneCount / totalCount) * 100}%` }} />
+                    <div className="h-full bg-teal-400 rounded-full transition-all" style={{ width: `${(doneCount / totalCount) * 100}%` }} />
                   </div>
                   <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{doneCount}/{totalCount}</span>
                 </div>
@@ -139,7 +139,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
                     type="checkbox"
                     checked={sub.status === 'done'}
                     onChange={e => onToggleSubtask(task.id, sub.id, e.target.checked)}
-                    className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer flex-shrink-0"
+                    className="w-3.5 h-3.5 accent-teal-600 cursor-pointer flex-shrink-0"
                   />
                   <span className={`text-xs flex-1 ${sub.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>{sub.title}</span>
                   <button
@@ -160,17 +160,17 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
                     onChange={e => setNewSubtaskTitle(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleAddSubtask(); if (e.key === 'Escape') { setAddingSubtask(false); setNewSubtaskTitle(''); } }}
                     placeholder="Subtask title..."
-                    className="flex-1 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500"
+                    className="flex-1 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500"
                   />
-                  <button onClick={handleAddSubtask} className="text-xs px-2 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">Add</button>
-                  <button onClick={() => { setAddingSubtask(false); setNewSubtaskTitle(''); }} className="text-xs px-2 py-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded">✕</button>
+                  <button onClick={handleAddSubtask} className="text-xs px-2 py-1.5 bg-teal-600 text-white rounded hover:bg-teal-700 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">Add</button>
+                  <button onClick={() => { setAddingSubtask(false); setNewSubtaskTitle(''); }} className="text-xs px-2 py-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded">âœ•</button>
                 </div>
               )}
             </div>
           )}
           <button
             onClick={() => { setAddingSubtask(true); }}
-            className="mt-2 text-xs text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 rounded"
+            className="mt-2 text-xs text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 rounded"
           >
             + Add subtask
           </button>
@@ -181,7 +181,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
           <button
             onClick={() => onUpdate(task.id, { pinnedToday: !task.pinnedToday })}
             title={task.pinnedToday ? 'Unpin from Today' : 'Pin to Today'}
-            className={`${iconBtn} ${task.pinnedToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-300 hover:text-indigo-400 dark:text-gray-600 dark:hover:text-indigo-400'}`}
+            className={`${iconBtn} ${task.pinnedToday ? 'text-teal-600 dark:text-teal-400' : 'text-gray-300 hover:text-teal-400 dark:text-gray-600 dark:hover:text-teal-400'}`}
           >
             <svg className="w-4 h-4" fill={task.pinnedToday ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" />
@@ -192,7 +192,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
             <button
               onClick={() => onFocusTask(task)}
               title="Focus with Pomodoro timer"
-              className={`${iconBtn} text-gray-300 hover:text-indigo-500 dark:text-gray-600 dark:hover:text-indigo-400`}
+              className={`${iconBtn} text-gray-300 hover:text-teal-500 dark:text-gray-600 dark:hover:text-teal-400`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -203,7 +203,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
           <button
             onClick={() => setEditing(true)}
             title="Edit task"
-            className={`${iconBtn} text-gray-300 hover:text-indigo-500 dark:text-gray-600 dark:hover:text-indigo-400`}
+            className={`${iconBtn} text-gray-300 hover:text-teal-500 dark:text-gray-600 dark:hover:text-teal-400`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -234,3 +234,4 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
     </>
   );
 }
+

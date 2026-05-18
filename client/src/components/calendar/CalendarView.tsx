@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { Task, Section } from '../../types';
 import { TaskForm } from '../tasks/TaskForm';
 
@@ -86,13 +86,13 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{MONTHS[month]} {year}</h1>
-          <button onClick={goToday} className="text-xs px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">Today</button>
+          <button onClick={goToday} className="text-xs px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">Today</button>
         </div>
         <div className="flex gap-1">
-          <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+          <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+          <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </button>
         </div>
@@ -127,7 +127,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
           {weeks.map((week, wi) => (
             <div key={wi} className="grid grid-cols-7 gap-1">
               {week.map((dateStr, di) => {
-                if (!dateStr) return <div key={di} className="rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-transparent" />;
+                if (!dateStr) return <div key={di} className="rounded bg-gray-50 dark:bg-gray-800/50 border border-transparent" />;
 
                 const dayTasks = tasksByDate[dateStr] ?? [];
                 const isToday = dateStr === today;
@@ -138,9 +138,9 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
                 return (
                   <div
                     key={dateStr}
-                    className={`rounded-lg border p-1.5 flex flex-col cursor-pointer transition-colors min-h-[80px]
-                      ${isDragOver ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 ring-2 ring-indigo-300' :
-                        isToday ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' :
+                    className={`rounded border p-1.5 flex flex-col cursor-pointer transition-colors min-h-[80px]
+                      ${isDragOver ? 'border-teal-400 bg-teal-50 dark:bg-teal-900/20 ring-2 ring-teal-300' :
+                        isToday ? 'border-teal-400 bg-teal-50 dark:bg-teal-900/20' :
                         hasOverdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' :
                         'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700'}`}
                     onClick={() => setCreatingForDate(dateStr)}
@@ -154,8 +154,8 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
                       setDraggingTaskId(null);
                     }}
                   >
-                    <span className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full mb-1
-                      ${isToday && !isDragOver ? 'bg-indigo-600 text-white' : isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>
+                    <span className={`text-xs font-semibold font-mono w-6 h-6 flex items-center justify-center rounded-full mb-1
+                      ${isToday && !isDragOver ? 'bg-teal-600 text-white' : isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}`}>
                       {parseInt(dateStr.split('-')[2], 10)}
                     </span>
                     <div className="flex-1 space-y-0.5 overflow-hidden">
@@ -174,11 +174,11 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
                             ${draggingTaskId === task.id ? 'opacity-40' : ''}
                             ${task.deadline! < today
                               ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50'
-                              : 'bg-gray-100 text-gray-700 hover:bg-indigo-100 hover:text-indigo-700 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-indigo-800/50 dark:hover:text-indigo-300'}`}
+                              : 'bg-gray-100 text-gray-700 hover:bg-teal-100 hover:text-teal-700 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-teal-800/50 dark:hover:text-teal-300'}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_COLORS[task.priority]}`} />
                           <span className="truncate">{task.title}</span>
-                          {task.recurrence && <span className="flex-shrink-0 opacity-60">↻</span>}
+                          {task.recurrence && <svg className="w-3 h-3 flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
                         </div>
                       ))}
                       {dayTasks.length > 3 && (
@@ -201,7 +201,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
             <span className={`w-2 h-2 rounded-full ${PRIORITY_COLORS[p]}`} /> {p}
           </span>
         ))}
-        <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 ml-2">↻ recurring</span>
+        <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 ml-2"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> recurring</span>
       </div>
 
       {editingTask && (
@@ -213,3 +213,4 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
     </div>
   );
 }
+

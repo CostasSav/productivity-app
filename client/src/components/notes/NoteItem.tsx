@@ -1,4 +1,4 @@
-import type { NoteListItem, Section } from '../../types';
+﻿import type { NoteListItem, Section } from '../../types';
 
 interface NoteItemProps {
   note: NoteListItem;
@@ -23,14 +23,14 @@ export function NoteItem({ note, section, selected, onClick, onDelete }: NoteIte
   return (
     <div
       onClick={onClick}
-      className={`group flex items-start justify-between p-3 rounded-lg cursor-pointer transition-colors
+      className={`group flex items-start justify-between p-3 rounded cursor-pointer transition-colors
         ${selected
-          ? 'bg-indigo-50 border border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-700'
+          ? 'bg-teal-50 border border-teal-200 dark:bg-teal-900/20 dark:border-teal-700'
           : 'hover:bg-gray-50 border border-transparent dark:hover:bg-gray-700/50'}`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className={`font-medium text-sm truncate ${selected ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-800 dark:text-gray-100'}`}>{note.title}</p>
+          <p className={`font-medium text-sm truncate ${selected ? 'text-teal-700 dark:text-teal-400' : 'text-gray-800 dark:text-gray-100'}`}>{note.title}</p>
           <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{date}</span>
         </div>
         {section && (
@@ -55,3 +55,4 @@ export function NoteItem({ note, section, selected, onClick, onDelete }: NoteIte
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import type { NoteListItem, Section } from '../../types';
 import { NoteItem } from './NoteItem';
 
@@ -13,18 +13,18 @@ interface NoteListProps {
   onDelete: (id: number) => void;
 }
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
+// â”€â”€ Skeleton â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SkeletonNoteItem() {
   return (
-    <div className="p-3 rounded-lg animate-pulse space-y-1.5">
+    <div className="p-3 rounded animate-pulse space-y-1.5">
       <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-4/5" />
       <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
     </div>
   );
 }
 
-// ── NoteList ──────────────────────────────────────────────────────────────────
+// â”€â”€ NoteList â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function NoteList({ notes, sections, loading, selectedId, filterSectionId, onSelect, onNew, onDelete }: NoteListProps) {
   const [sectionFilter, setSectionFilter] = useState<number | null | 'all'>('all');
@@ -39,11 +39,11 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
     <div className="w-72 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full bg-white dark:bg-gray-900">
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
         <h2 className="font-semibold text-gray-800 dark:text-gray-100">Notes</h2>
-        {/* CTA — matches Habits/Tasks button style */}
+        {/* CTA â€” matches Habits/Tasks button style */}
         <button
           onClick={onNew}
           title="New note"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white text-xs font-medium rounded hover:bg-orange-600 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-1"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -87,7 +87,7 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">No notes yet</p>
             <button
               onClick={onNew}
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded"
+              className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 rounded"
             >
               Create one
             </button>
@@ -108,3 +108,4 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
     </div>
   );
 }
+

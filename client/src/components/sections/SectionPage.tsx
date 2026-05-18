@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import type { Section, Note, Task } from '../../types';
 import { TaskList } from '../tasks/TaskList';
 import { NoteList } from '../notes/NoteList';
@@ -97,7 +97,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
   const tabBtn = (t: typeof tab, label: string) => (
     <button onClick={() => setTab(t)}
       className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors
-        ${tab === t ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
+        ${tab === t ? 'border-teal-600 text-teal-600 dark:text-teal-400 dark:border-teal-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>
       {label}
     </button>
   );
@@ -110,7 +110,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
           {editing ? (
             <div className="flex items-center gap-2">
               <input value={editName} onChange={e => setEditName(e.target.value)}
-                className="border rounded-lg px-3 py-1.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 w-48 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100" />
+                className="border rounded px-3 py-1.5 text-lg font-bold focus:outline-none focus:ring-2 focus:ring-teal-500 w-48 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100" />
               <div className="flex gap-1">
                 {PALETTE.map(c => (
                   <button key={c} onClick={() => setEditColor(c)}
@@ -118,8 +118,8 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
                     style={{ backgroundColor: c }} />
                 ))}
               </div>
-              <button onClick={handleSaveEdit} className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Save</button>
-              <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
+              <button onClick={handleSaveEdit} className="px-3 py-1.5 text-sm bg-orange-500 text-white rounded hover:bg-orange-600">Save</button>
+              <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
             </div>
           ) : (
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{section.name}</h1>
@@ -134,7 +134,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
                 <span><strong className="text-gray-800 dark:text-gray-100">{sectionHabits.length}</strong> habits</span>
               )}
             </div>
-            <button onClick={() => setEditing(true)} className="p-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded" title="Edit section">
+            <button onClick={() => setEditing(true)} className="p-1.5 text-gray-400 hover:text-teal-600 dark:text-gray-500 dark:hover:text-teal-400 rounded" title="Edit section">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
             </button>
             {confirmDelete ? (
@@ -176,7 +176,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
                 <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500">
                   <div className="text-center">
                     <p className="mb-2">No note selected</p>
-                    <button onClick={handleNewNote} className="text-indigo-600 dark:text-indigo-400 hover:underline text-sm">Create a note in this section</button>
+                    <button onClick={handleNewNote} className="text-teal-600 dark:text-teal-400 hover:underline text-sm">Create a note in this section</button>
                   </div>
                 </div>
               )}
@@ -194,7 +194,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
           <div className="h-full overflow-y-auto py-2">
             {sectionHabits.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
-                <p className="text-3xl mb-3">🔥</p>
+                <p className="text-3xl mb-3">ðŸ”¥</p>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No habits in this section.</p>
                 <p className="text-xs mt-1">Assign habits to this section from the Habits page.</p>
               </div>
@@ -209,7 +209,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
                   const done = !!todayLog;
 
                   return (
-                    <div key={habit.id} className="relative flex items-center gap-3 p-4 rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+                    <div key={habit.id} className="relative flex items-center gap-3 p-4 rounded border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
                       <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: habit.color }} />
                       <span className="text-xl leading-none flex-shrink-0">{habit.icon}</span>
                       <div className="flex-1 min-w-0">
@@ -218,9 +218,9 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
                         </p>
                         <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
                           {done
-                            ? <span className="text-green-600 dark:text-green-400 font-medium">✓ Done today</span>
+                            ? <span className="text-green-600 dark:text-green-400 font-medium">âœ“ Done today</span>
                             : streak > 0
-                              ? `🔥 ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
+                              ? `ðŸ”¥ ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
                               : dueToday ? 'Due today' : habit.frequency}
                         </p>
                       </div>
@@ -249,3 +249,4 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
     </div>
   );
 }
+
