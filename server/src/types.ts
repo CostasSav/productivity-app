@@ -43,7 +43,7 @@ export interface PomodoroSession {
   type: 'work' | 'break';
 }
 
-export type HabitFrequency = 'daily' | 'weekly';
+export type HabitFrequency = 'daily' | 'weekly' | 'weekly_count';
 
 export interface Habit {
   id: number;
@@ -53,7 +53,8 @@ export interface Habit {
   color: string;
   icon: string;
   frequency: HabitFrequency;
-  targetDays: number[]; // day-of-week numbers 0-6; empty for daily
+  targetDays: number[]; // day-of-week numbers 0-6; used by 'weekly' mode
+  targetCount: number | null; // used by 'weekly_count' mode
   order: number;
   createdAt: string;
   archivedAt: string | null;

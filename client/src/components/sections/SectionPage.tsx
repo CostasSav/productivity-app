@@ -8,7 +8,7 @@ import { useNotes } from '../../hooks/useNotes';
 import { useHabits } from '../../hooks/useHabits';
 import { api } from '../../api';
 import { CalendarView } from '../calendar/CalendarView';
-import { isDue, localDateStr, logToLocalDate, calcCurrentStreak } from '../../utils/habitStats';
+import { isDue, localDateStr, logToLocalDate, calcCurrentStreak, getMonday, getWeekLogCount } from '../../utils/habitStats';
 
 interface SectionPageProps {
   section: Section;
@@ -194,7 +194,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
           <div className="h-full overflow-y-auto py-2">
             {sectionHabits.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
-                <p className="text-3xl mb-3">ðŸ”¥</p>
+                <p className="text-3xl mb-3">ðŸ"¥</p>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No habits in this section.</p>
                 <p className="text-xs mt-1">Assign habits to this section from the Habits page.</p>
               </div>
@@ -204,9 +204,24 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
                   const logDates = logDatesByHabitId.get(habit.id) ?? new Set<string>();
                   const todayLog = todayLogByHabitId.get(habit.id) ?? null;
                   const streak = calcCurrentStreak(habit, logDates);
-                  const dueToday = isDue(habit, todayDow);
-                  const unitLabel = habit.frequency === 'weekly' ? 'week' : 'day';
+                  const dueToday = habit.frequency === 'weekly_count'
+                    ? getWeekLogCount(logDates, getMonday(new Date())) < (habit.targetCount ?? 1)
+                    : isDue(habit, todayDow);
+                  const unitLabel = habit.frequency === 'daily' ? 'day' : 'wk';
                   const done = !!todayLog;
+                  const weekCount = habit.frequency === 'weekly_count'
+                    ? getWeekLogCount(logDates, getMonday(new Date()))
+                    : null;
+
+                  const habitSubtitle = () => {
+                    if (habit.frequency === 'weekly_count') {
+                      if (done) return <span className="text-green-600 dark:text-green-400 font-medium">&#10003; Logged &mdash; {weekCount}/{habit.targetCount} this week</span>;
+                      return `${weekCount}/${habit.targetCount} this week`;
+                    }
+                    if (done) return <span className="text-green-600 dark:text-green-400 font-medium">&#10003; Done today</span>;
+                    if (streak > 0) return `🔥 ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`;
+                    return dueToday ? 'Due today' : habit.frequency;
+                  };
 
                   return (
                     <div key={habit.id} className="relative flex items-center gap-3 p-4 rounded border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
@@ -216,13 +231,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
                         <p className={`font-medium leading-snug ${done ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>
                           {habit.name}
                         </p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                          {done
-                            ? <span className="text-green-600 dark:text-green-400 font-medium">âœ“ Done today</span>
-                            : streak > 0
-                              ? `ðŸ”¥ ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
-                              : dueToday ? 'Due today' : habit.frequency}
-                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{habitSubtitle()}</p>
                       </div>
                       {dueToday && (
                         <button

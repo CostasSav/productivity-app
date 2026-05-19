@@ -37,7 +37,10 @@ function load(): DbData {
     if (raw._habitLogSeq === undefined) raw._habitLogSeq = 0;
     // Migrate habits that predate the order field
     if (Array.isArray(raw.habits)) {
-      raw.habits = (raw.habits as any[]).map((h: any, i: number) => (h.order === undefined ? { ...h, order: i } : h));
+      raw.habits = (raw.habits as any[]).map((h: any, i: number) => ({
+        targetCount: null,
+        ...(h.order === undefined ? { ...h, order: i } : h),
+      }));
     }
     // Migrate tasks that predate subtasks / pinnedToday / pinnedAt
     if (Array.isArray(raw.tasks)) {

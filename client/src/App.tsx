@@ -5,6 +5,7 @@ import { NoteEditor } from './components/notes/NoteEditor';
 import { CalendarView } from './components/calendar/CalendarView';
 import { SectionPage } from './components/sections/SectionPage';
 import { PomodoroPanel } from './components/PomodoroPanel';
+import { CommandPalette } from './components/ui/CommandPalette';
 import { Today } from './pages/Today';
 import { Habits } from './pages/Habits';
 import { useNotes } from './hooks/useNotes';
@@ -39,7 +40,19 @@ export default function App() {
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [focusTask, setFocusTask] = useState<{ id: number; title: string } | null>(null);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
   const { dark, toggle } = useDarkMode();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowPalette(p => !p);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   useEffect(() => {
     if (!selectedNoteId && notes.length > 0) setSelectedNoteId(notes[0].id);
@@ -208,27 +221,27 @@ export default function App() {
       {/* Main */}
       <main className="flex-1 flex overflow-hidden">
         {view === 'today' && (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto animate-fade-in">
             <Today onFocusTask={handleFocusTask} />
           </div>
         )}
         {view === 'tasks' && (
-          <div className="flex-1 overflow-y-auto p-8">
+          <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
             <TaskList sections={sections} onCreateSection={createSection} onFocusTask={handleFocusTask} />
           </div>
         )}
         {view === 'calendar' && (
-          <div className="flex-1 overflow-y-auto p-8">
+          <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
             <CalendarView tasks={tasks} sections={sections} onUpdateTask={updateTask} onCreateTask={createTask} onCreateSection={createSection} />
           </div>
         )}
         {view === 'habits' && (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto animate-fade-in">
             <Habits />
           </div>
         )}
         {view === 'notes' && (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 flex overflow-hidden animate-fade-in">
             <NoteList
               notes={notes} sections={sections} loading={notesLoading}
               selectedId={selectedNoteId} onSelect={id => setSelectedNoteId(id)}
@@ -253,7 +266,7 @@ export default function App() {
           </div>
         )}
         {typeof view === 'object' && view.type === 'section' && currentSection && (
-          <div className="flex-1 overflow-y-auto p-8">
+          <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
             <SectionPage
               key={currentSection.id} section={currentSection} sections={sections}
               onCreateSection={createSection} onEditSection={handleEditSection}
@@ -267,6 +280,14 @@ export default function App() {
         <PomodoroPanel
           task={focusTask} isTimerRunning={isTimerRunning}
           onRunningChange={setIsTimerRunning} onClose={handleClosePanel}
+        />
+      )}
+
+      {showPalette && (
+        <CommandPalette
+          sections={sections}
+          onNavigate={v => setView(v as View)}
+          onClose={() => setShowPalette(false)}
         />
       )}
     </div>

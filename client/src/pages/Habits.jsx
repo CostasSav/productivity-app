@@ -8,11 +8,12 @@ import { api } from '../api';
 import {
   localDateStr, logToLocalDate, getLast7Days, getLast28Days,
   isDue, isWeekFullyComplete, calcCurrentStreak, calcLongestStreak, calcRate30,
+  getMonday, getWeekLogCount, weeklyCountRemaining,
 } from '../utils/habitStats';
 
 // â"€â"€ Constants â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-const EMOJIS = ['ðŸ’§','ðŸƒâ€â™‚ï¸','ðŸ"š','ðŸ§˜â€â™€ï¸','ðŸ’ª','ðŸ¥—','ðŸ˜´','âœï¸','ðŸŽ¯','ðŸ§¹','ðŸ’Š','ðŸš´','ðŸŽ','ðŸ§ ','ðŸŽ¨','ðŸŽ¸','ðŸŒ¿','â˜€ï¸','ðŸš¶','ðŸ’¤'];
+const EMOJIS = ['\u{1F4A7}','\u{1F3C3}\u{200D}\u{2642}\u{FE0F}','\u{1F4DA}','\u{1F9D8}\u{200D}\u{2640}\u{FE0F}','\u{1F4AA}','\u{1F957}','\u{1F634}','\u{270D}\u{FE0F}','\u{1F3AF}','\u{1F9F9}','\u{1F48A}','\u{1F6B4}','\u{1F3B6}','\u{1F9E0}','\u{1F3A8}','\u{1F3B8}','\u{1F33F}','\u{2600}\u{FE0F}','\u{1F6B6}','\u{1F4A4}'];
 const PALETTE = ['#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#eab308','#22c55e','#14b8a6','#3b82f6','#64748b'];
 const WEEK_DAYS = [
   { label: 'Mon', value: 1 },
@@ -36,7 +37,7 @@ function StatsPanel({ habit, logDates }) {
   const longest = calcLongestStreak(habit, logDates);
   const total = logDates.size;
   const rate = calcRate30(habit, logDates);
-  const unitLabel = habit.frequency === 'weekly' ? 'wk' : 'day';
+  const unitLabel = habit.frequency === 'daily' ? 'day' : 'wk';
 
   const last28 = getLast28Days();
   const heatmapRows = [
@@ -59,14 +60,14 @@ function StatsPanel({ habit, logDates }) {
       <div className="grid grid-cols-2 gap-2">
         {statCell(
           'Current streak',
-          current > 0 ? `ðŸ"¥ ${current} ${unitLabel}${current !== 1 ? 's' : ''}` : 'â€"',
+          current > 0 ? `🔥 ${current} ${unitLabel}${current !== 1 ? 's' : ''}` : '—',
         )}
         {statCell(
           'Longest streak',
-          longest > 0 ? `${longest} ${unitLabel}${longest !== 1 ? 's' : ''}` : 'â€"',
+          longest > 0 ? `${longest} ${unitLabel}${longest !== 1 ? 's' : ''}` : '—',
         )}
-        {statCell('Total completions', total > 0 ? total : 'â€"')}
-        {statCell('Last 30 days', rate !== null ? `${rate}%` : 'â€"')}
+        {statCell('Total completions', total > 0 ? total : '—')}
+        {statCell('Last 30 days', rate !== null ? `${rate}%` : '—')}
       </div>
 
       <div>
@@ -82,7 +83,7 @@ function StatsPanel({ habit, logDates }) {
             <div key={ri} className="grid grid-cols-7 gap-1">
               {row.map(({ dateStr, dow }) => {
                 const completed = logDates.has(dateStr);
-                const due = isDue(habit, dow);
+                const due = isDue(habit, dow); // weekly_count always returns true
                 const isToday = dateStr === today;
                 const cellStyle = {
                   ...(completed ? { backgroundColor: habit.color + 'cc' } : {}),
@@ -116,6 +117,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
   const [color, setColor] = useState(initial?.color ?? PALETTE[0]);
   const [frequency, setFrequency] = useState(initial?.frequency ?? 'daily');
   const [targetDays, setTargetDays] = useState(initial?.targetDays ?? []);
+  const [targetCount, setTargetCount] = useState(initial?.targetCount ?? 4);
   const [sectionId, setSectionId] = useState(initial?.sectionId ?? null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -142,6 +144,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
         description: description.trim() || null,
         icon, color, frequency,
         targetDays: frequency === 'weekly' ? targetDays : [],
+        targetCount: frequency === 'weekly_count' ? targetCount : null,
         sectionId,
       });
       onClose();
@@ -177,7 +180,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
                   onClick={handleArchive} disabled={archiving}
                   className="px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
                 >
-                  {archiving ? 'Archivingâ€¦' : 'Yes, archive'}
+                  {archiving ? 'Archiving…' : 'Yes, archive'}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(false)}
@@ -203,7 +206,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
               onClick={handleSubmit} disabled={saving}
               className="px-4 py-2 text-sm bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-50"
             >
-              {saving ? 'Savingâ€¦' : isEdit ? 'Save Changes' : 'Create Habit'}
+              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Habit'}
             </button>
           </div>
         </div>
@@ -217,13 +220,13 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
           <input
             autoFocus value={name} onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleSubmit(); }}
-            className={inputCls} placeholder="e.g. Drink water, Read 20 pagesâ€¦"
+            className={inputCls} placeholder="e.g. Drink water, Read 20 pages…"
           />
         </div>
 
         <div>
           <label className={labelCls}>Description</label>
-          <input value={description} onChange={e => setDescription(e.target.value)} className={inputCls} placeholder="Optional notesâ€¦" />
+          <input value={description} onChange={e => setDescription(e.target.value)} className={inputCls} placeholder="Optional notes…" />
         </div>
 
         <div>
@@ -254,11 +257,15 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
         <div>
           <label className={labelCls}>Frequency</label>
           <div className="flex gap-2">
-            {['daily', 'weekly'].map(f => (
-              <button key={f} type="button" onClick={() => handleFrequencyChange(f)}
-                className={`px-4 py-2 rounded text-sm font-medium capitalize transition-colors ${frequency === f ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
+            {[
+              { value: 'daily', label: 'Daily' },
+              { value: 'weekly', label: 'Set days' },
+              { value: 'weekly_count', label: '× per week' },
+            ].map(({ value, label }) => (
+              <button key={value} type="button" onClick={() => handleFrequencyChange(value)}
+                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${frequency === value ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
               >
-                {f}
+                {label}
               </button>
             ))}
           </div>
@@ -273,6 +280,25 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
                     {label}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+          {frequency === 'weekly_count' && (
+            <div className="mt-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Minimum sessions per week</p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTargetCount(c => Math.max(1, c - 1))}
+                  className="w-8 h-8 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold text-lg leading-none hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >−</button>
+                <span className="text-xl font-semibold w-6 text-center text-gray-800 dark:text-gray-100">{targetCount}</span>
+                <button
+                  type="button"
+                  onClick={() => setTargetCount(c => Math.min(7, c + 1))}
+                  className="w-8 h-8 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold text-lg leading-none hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >+</button>
+                <span className="text-sm text-gray-400 dark:text-gray-500">× per week</span>
               </div>
             </div>
           )}
@@ -312,7 +338,10 @@ function HabitCard({
 
   const todayLog = logsByDate.get(today) ?? null;
   const streak = calcCurrentStreak(habit, logDates);
-  const unitLabel = habit.frequency === 'weekly' ? 'week' : 'day';
+  const unitLabel = habit.frequency === 'daily' ? 'day' : 'wk';
+  const weekCount = habit.frequency === 'weekly_count'
+    ? getWeekLogCount(logDates, getMonday(new Date()))
+    : null;
 
   const handleCheck = (e) => {
     e.stopPropagation();
@@ -352,8 +381,17 @@ function HabitCard({
 
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100 leading-snug truncate">{habit.name}</h3>
-          {streak > 0 ? (
-            <p className="text-xs font-medium text-orange-500 mt-0.5">ðŸ"¥ {streak} {unitLabel}{streak !== 1 ? 's' : ''}</p>
+          {habit.frequency === 'weekly_count' ? (
+            <p className="text-xs font-medium mt-0.5">
+              {streak > 0
+                ? <span className="text-orange-500">🔥 {streak} wk{streak !== 1 ? 's' : ''} &nbsp;</span>
+                : null}
+              <span className={weekCount >= habit.targetCount ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}>
+                {weekCount}/{habit.targetCount} this week
+              </span>
+            </p>
+          ) : streak > 0 ? (
+            <p className="text-xs font-medium text-orange-500 mt-0.5">🔥 {streak} {unitLabel}{streak !== 1 ? 's' : ''}</p>
           ) : (
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">No streak yet</p>
           )}
@@ -385,8 +423,9 @@ function HabitCard({
           const isToday = dateStr === today;
           let circleClass = '';
           let circleStyle = {};
+          const alwaysDue = habit.frequency === 'daily' || habit.frequency === 'weekly_count';
           if (completed) { circleStyle = { backgroundColor: habit.color }; }
-          else if (!due) { circleClass = 'bg-gray-100 dark:bg-gray-700/40 opacity-40'; }
+          else if (!due && !alwaysDue) { circleClass = 'bg-gray-100 dark:bg-gray-700/40 opacity-40'; }
           else if (isToday) { circleClass = 'border-2 bg-transparent'; circleStyle = { borderColor: habit.color }; }
           else { circleClass = 'bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'; }
           return (

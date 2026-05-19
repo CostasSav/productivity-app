@@ -14,9 +14,14 @@
 /* ── Reduced-motion: disable all custom animations ──────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .animate-habit-pop,
-  .confetti-particle {
+  .confetti-particle,
+  .animate-fade-in,
+  .animate-slide-down,
+  .task-enter,
+  .animate-task-done {
     animation: none !important;
-    opacity: 0 !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 
@@ -48,4 +53,42 @@
   background-color: var(--color, #0D9488);
   animation: confetti-fly 0.5s ease-out forwards;
   pointer-events: none;
+}
+
+/* ── View transition ─────────────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 150ms ease-out both;
+}
+
+/* ── Command palette slide-down ──────────────────────────────────────────────── */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down {
+  animation: slide-down 160ms ease-out both;
+}
+
+/* ── Staggered list entry ────────────────────────────────────────────────────── */
+@keyframes task-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.task-enter {
+  animation: task-enter 200ms ease-out both;
+}
+
+/* ── Task check-off pop ──────────────────────────────────────────────────────── */
+@keyframes task-done {
+  0%   { transform: scale(1); }
+  30%  { transform: scale(1.012); }
+  65%  { transform: scale(0.997); }
+  100% { transform: scale(1); }
+}
+.animate-task-done {
+  animation: task-done 280ms ease-out both;
 }

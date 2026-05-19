@@ -49,6 +49,7 @@ interface TaskItemProps {
 
 export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, onAddSubtask, onToggleSubtask, onDeleteSubtask, onFocusTask, pomodoroCount = 0 }: TaskItemProps) {
   const [editing, setEditing] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const subtaskInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +60,10 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
   const totalCount = task.subtasks.length;
 
   const toggleDone = () => {
+    if (task.status !== 'done') {
+      setCompleting(true);
+      setTimeout(() => setCompleting(false), 280);
+    }
     onUpdate(task.id, { status: task.status === 'done' ? 'todo' : 'done' });
   };
 
@@ -78,8 +83,9 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
   return (
     <>
       <div className={`flex items-start gap-3 p-4 rounded border transition-colors
+        ${completing ? 'animate-task-done' : ''}
         ${overdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700'}
-        ${task.status === 'done' ? 'opacity-60' : ''}`}>
+        ${task.status === 'done' && !completing ? 'opacity-60' : ''}`}>
         <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${overdue ? 'bg-red-500' : PRIORITY_BORDER[task.priority]}`} />
 
         {/* Checkbox â€” wrapped for a larger tap target */}
@@ -128,7 +134,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
               {totalCount > 0 && (
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="flex-1 h-1 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-                    <div className="h-full bg-teal-400 rounded-full transition-all" style={{ width: `${(doneCount / totalCount) * 100}%` }} />
+                    <div className="h-full bg-teal-400 rounded-full" style={{ transform: `scaleX(${doneCount / totalCount})`, transformOrigin: 'left', transition: 'transform 0.35s ease-out' }} />
                   </div>
                   <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{doneCount}/{totalCount}</span>
                 </div>

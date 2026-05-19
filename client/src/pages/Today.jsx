@@ -6,7 +6,7 @@ import { useHabits } from '../hooks/useHabits';
 import { PriorityBadge } from '../components/ui/Badge';
 import { SectionBadge } from '../components/sections/SectionBadge';
 import { Spinner } from '../components/ui/Spinner';
-import { isDue, localDateStr, logToLocalDate, calcCurrentStreak } from '../utils/habitStats';
+import { isDue, localDateStr, logToLocalDate, calcCurrentStreak, getMonday, getWeekLogCount, weeklyCountRemaining } from '../utils/habitStats';
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const PRIORITY_FALLBACK = { high: '#f87171', medium: '#fbbf24', low: '#4ade80' };
@@ -133,9 +133,20 @@ function SectionHeader({ title, count }) {
   );
 }
 
-function TodayHabitRow({ habit, todayLog, streak, onLog, onUnlog }) {
-  const unitLabel = habit.frequency === 'weekly' ? 'week' : 'day';
+function TodayHabitRow({ habit, todayLog, streak, weekCount, onLog, onUnlog }) {
+  const unitLabel = habit.frequency === 'daily' ? 'day' : 'wk';
   const done = !!todayLog;
+
+  const subtitle = () => {
+    if (habit.frequency === 'weekly_count') {
+      const remaining = (habit.targetCount ?? 1) - (weekCount ?? 0);
+      if (done) return <span className="text-green-600 dark:text-green-400 font-medium">&#10003; Logged &mdash; {weekCount}/{habit.targetCount} this week</span>;
+      return `${weekCount}/${habit.targetCount} this week – ${remaining} to go`;
+    }
+    if (done) return <span className="text-green-600 dark:text-green-400 font-medium">&#10003; Done today</span>;
+    if (streak > 0) return `🔥 ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`;
+    return 'Due today';
+  };
 
   return (
     <div className="relative flex items-center gap-3 p-4 rounded border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
@@ -145,13 +156,7 @@ function TodayHabitRow({ habit, todayLog, streak, onLog, onUnlog }) {
         <p className={`font-medium leading-snug ${done ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>
           {habit.name}
         </p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-          {done
-            ? <span className="text-green-600 dark:text-green-400 font-medium">âœ“ Done today</span>
-            : streak > 0
-              ? `ðŸ”¥ ${streak} ${unitLabel}${streak !== 1 ? 's' : ''}`
-              : 'Due today'}
-        </p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subtitle()}</p>
       </div>
       <button
         onClick={() => done ? onUnlog(todayLog.id) : onLog(habit.id)}
@@ -213,8 +218,6 @@ export function Today({ onFocusTask }) {
   const todayStr = localDateStr();
   const todayDow = new Date().getDay();
 
-  const habitsToday = habits.filter(h => !h.archivedAt && isDue(h, todayDow));
-
   const logDatesByHabitId = new Map();
   const todayLogByHabitId = new Map();
   habitLogs.forEach(l => {
@@ -224,6 +227,15 @@ export function Today({ onFocusTask }) {
     if (dateStr === todayStr && !todayLogByHabitId.has(l.habitId)) {
       todayLogByHabitId.set(l.habitId, l);
     }
+  });
+
+  const habitsToday = habits.filter(h => {
+    if (h.archivedAt) return false;
+    if (h.frequency === 'weekly_count') {
+      const logDates = logDatesByHabitId.get(h.id) ?? new Set();
+      return weeklyCountRemaining(h, logDates) > 0;
+    }
+    return isDue(h, todayDow);
   });
 
   const activeHabitsToday = habitsToday.filter(h => !todayLogByHabitId.has(h.id));
@@ -328,12 +340,16 @@ export function Today({ onFocusTask }) {
                 {habitsToday.map(habit => {
                   const logDates = logDatesByHabitId.get(habit.id) ?? new Set();
                   const streak = calcCurrentStreak(habit, logDates);
+                  const weekCount = habit.frequency === 'weekly_count'
+                    ? getWeekLogCount(logDates, getMonday(new Date()))
+                    : null;
                   return (
                     <TodayHabitRow
                       key={habit.id}
                       habit={habit}
                       todayLog={todayLogByHabitId.get(habit.id) ?? null}
                       streak={streak}
+                      weekCount={weekCount}
                       onLog={logHabit}
                       onUnlog={unlogHabit}
                     />

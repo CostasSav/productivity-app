@@ -72,6 +72,8 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
   const [sectionFilter, setSectionFilter] = useState<number | null | 'all'>(
     filterSectionId !== undefined ? filterSectionId : 'all'
   );
+  const [filterKey, setFilterKey] = useState(0);
+  const bumpKey = () => setFilterKey(k => k + 1);
 
   const sectionFiltered = (() => {
     if (filterSectionId !== undefined) return tasks.filter(t => t.section_id === filterSectionId);
@@ -123,7 +125,7 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
         {/* Status filter */}
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded p-1">
           {(['all', 'active', 'done'] as const).map(f => (
-            <button key={f} onClick={() => setStatusFilter(f)}
+            <button key={f} onClick={() => { setStatusFilter(f); bumpKey(); }}
               className={`${filterBtnBase} ${statusFilter === f ? filterActive : filterInactive}`}>
               {f}
             </button>
@@ -132,12 +134,12 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
 
         {/* Priority filter */}
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded p-1">
-          <button onClick={() => setPriorityFilter('all')}
+          <button onClick={() => { setPriorityFilter('all'); bumpKey(); }}
             className={`${filterBtnBase} text-xs ${priorityFilter === 'all' ? filterActive : filterInactive}`}>
             All
           </button>
           {([['high', 'bg-red-400'], ['medium', 'bg-yellow-400'], ['low', 'bg-green-400']] as const).map(([p, color]) => (
-            <button key={p} onClick={() => setPriorityFilter(priorityFilter === p ? 'all' : p)}
+            <button key={p} onClick={() => { setPriorityFilter(priorityFilter === p ? 'all' : p); bumpKey(); }}
               className={`flex items-center gap-1.5 ${filterBtnBase} text-xs ${priorityFilter === p ? filterActive : filterInactive}`}>
               <span className={`w-2 h-2 rounded-full ${color}`} />{p}
             </button>
@@ -147,12 +149,12 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
         {/* Section filter */}
         {filterSectionId === undefined && sections.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            <button onClick={() => setSectionFilter('all')}
+            <button onClick={() => { setSectionFilter('all'); bumpKey(); }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${sectionFilter === 'all' ? 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
               All sections
             </button>
             {sections.map(s => (
-              <button key={s.id} onClick={() => setSectionFilter(sectionFilter === s.id ? 'all' : s.id)}
+              <button key={s.id} onClick={() => { setSectionFilter(sectionFilter === s.id ? 'all' : s.id); bumpKey(); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer"
                 style={sectionFilter === s.id
                   ? { backgroundColor: s.color, color: '#fff' }
@@ -184,9 +186,13 @@ export function TaskList({ sections, onCreateSection, filterSectionId, title = '
         </div>
       )}
 
-      <div className="space-y-2 overflow-y-auto flex-1">
-        {displayed.map(task => (
-          <div key={task.id} className="relative">
+      <div key={filterKey} className="space-y-2 overflow-y-auto flex-1">
+        {displayed.map((task, i) => (
+          <div
+            key={task.id}
+            className="relative task-enter"
+            style={{ animationDelay: `${Math.min(i, 5) * 30}ms` }}
+          >
             <TaskItem task={task} sections={sections} onUpdate={updateTask} onDelete={deleteTask} onCreateSection={onCreateSection} onAddSubtask={addSubtask} onToggleSubtask={toggleSubtask} onDeleteSubtask={deleteSubtask} onFocusTask={onFocusTask} pomodoroCount={pomodoroCountByTaskId[task.id] ?? 0} />
           </div>
         ))}

@@ -12,7 +12,7 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { name, description, sectionId, color, icon, frequency, targetDays } = req.body;
+  const { name, description, sectionId, color, icon, frequency, targetDays, targetCount } = req.body;
   if (!name || !color || !icon || !frequency) {
     return res.status(400).json({ error: 'name, color, icon, and frequency are required' });
   }
@@ -24,6 +24,7 @@ router.post('/', (req, res) => {
     icon: String(icon),
     frequency: frequency as HabitFrequency,
     targetDays: Array.isArray(targetDays) ? (targetDays as unknown[]).map(Number) : [],
+    targetCount: targetCount != null ? Number(targetCount) : null,
   });
   res.status(201).json(habit);
 });
