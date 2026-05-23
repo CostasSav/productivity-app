@@ -26,7 +26,7 @@ const WEEK_DAYS = [
 ];
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-const inputCls = 'w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500';
+const inputCls = 'w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-zinc-800 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500';
 const labelCls = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
 
 // â"€â"€ StatsPanel â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -49,14 +49,14 @@ function StatsPanel({ habit, logDates }) {
   const colLabels = last28.slice(0, 7).map(d => DAY_LABELS[d.dow]);
 
   const statCell = (label, value) => (
-    <div className="bg-gray-50 dark:bg-gray-700/50 rounded p-2.5">
+    <div className="bg-gray-50 dark:bg-zinc-800/50 rounded p-2.5">
       <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">{label}</p>
       <p className="text-sm font-semibold font-mono text-gray-800 dark:text-gray-100">{value}</p>
     </div>
   );
 
   return (
-    <div className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-4">
+    <div className="border-t border-gray-100 dark:border-zinc-800/60 pt-4 space-y-4">
       <div className="grid grid-cols-2 gap-2">
         {statCell(
           'Current streak',
@@ -92,8 +92,8 @@ function StatsPanel({ habit, logDates }) {
                 const cellClass = completed
                   ? 'rounded-sm'
                   : due
-                    ? 'rounded-sm bg-gray-100 dark:bg-gray-700'
-                    : 'rounded-sm bg-gray-50 dark:bg-gray-700/30 opacity-40';
+                    ? 'rounded-sm bg-gray-100 dark:bg-zinc-800'
+                    : 'rounded-sm bg-gray-50 dark:bg-zinc-800/30 opacity-40';
                 return (
                   <div key={dateStr} className={`h-4 ${cellClass}`} style={cellStyle} title={dateStr} />
                 );
@@ -231,10 +231,10 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
 
         <div>
           <label className={labelCls}>Icon</label>
-          <div className="grid grid-cols-10 gap-1 p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
+          <div className="grid grid-cols-10 gap-1 p-2 bg-gray-50 dark:bg-zinc-800/50 rounded">
             {EMOJIS.map(e => (
               <button key={e} type="button" onClick={() => setIcon(e)}
-                className={`text-xl p-1.5 rounded transition-colors leading-none ${icon === e ? 'bg-white dark:bg-gray-600 ring-2 ring-teal-500 shadow-sm' : 'hover:bg-white dark:hover:bg-gray-600'}`}
+                className={`text-xl p-1.5 rounded transition-colors leading-none ${icon === e ? 'bg-white dark:bg-gray-600 ring-2 ring-teal-500 shadow-sm' : 'hover:bg-white dark:hover:bg-zinc-700'}`}
               >
                 {e}
               </button>
@@ -263,7 +263,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
               { value: 'weekly_count', label: '× per week' },
             ].map(({ value, label }) => (
               <button key={value} type="button" onClick={() => handleFrequencyChange(value)}
-                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${frequency === value ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
+                className={`px-4 py-2 rounded text-sm font-medium transition-colors ${frequency === value ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300 dark:hover:bg-zinc-700'}`}
               >
                 {label}
               </button>
@@ -275,7 +275,7 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
               <div className="flex gap-1.5 flex-wrap">
                 {WEEK_DAYS.map(({ label, value }) => (
                   <button key={value} type="button" onClick={() => toggleDay(value)}
-                    className={`w-10 h-10 rounded-full text-xs font-medium transition-colors ${targetDays.includes(value) ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}
+                    className={`w-10 h-10 rounded-full text-xs font-medium transition-colors ${targetDays.includes(value) ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300 dark:hover:bg-zinc-700'}`}
                   >
                     {label}
                   </button>
@@ -290,13 +290,13 @@ function HabitForm({ initial, sections, onCreateSection, onSave, onArchive, onCl
                 <button
                   type="button"
                   onClick={() => setTargetCount(c => Math.max(1, c - 1))}
-                  className="w-8 h-8 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold text-lg leading-none hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="w-8 h-8 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 font-bold text-lg leading-none hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
                 >−</button>
                 <span className="text-xl font-semibold w-6 text-center text-gray-800 dark:text-gray-100">{targetCount}</span>
                 <button
                   type="button"
                   onClick={() => setTargetCount(c => Math.min(7, c + 1))}
-                  className="w-8 h-8 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold text-lg leading-none hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  className="w-8 h-8 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 font-bold text-lg leading-none hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
                 >+</button>
                 <span className="text-sm text-gray-400 dark:text-gray-500">× per week</span>
               </div>
@@ -362,9 +362,9 @@ function HabitCard({
       onDrop={(e) => { e.preventDefault(); onDrop(habit.id); }}
       onDragEnd={() => { onDragEnd(); setTimeout(() => { wasDragging.current = false; }, 50); }}
       onClick={() => { if (!wasDragging.current) setExpanded(e => !e); }}
-      className={`bg-white dark:bg-gray-800 rounded border flex flex-col gap-4 p-5 cursor-pointer select-none transition-all duration-200
+      className={`bg-white dark:bg-[#09090b] rounded border flex flex-col gap-4 p-5 cursor-pointer select-none transition-all duration-200
         ${isDragging ? 'opacity-40 scale-95' : ''}
-        ${isDragOver ? 'ring-2 ring-teal-400 border-teal-300' : 'border-gray-200 dark:border-gray-700 hover:shadow-md'}
+        ${isDragOver ? 'ring-2 ring-teal-400 border-teal-300' : 'border-gray-200 dark:border-zinc-800/60 hover:shadow-md'}
       `}
     >
       {/* Header */}
@@ -415,22 +415,45 @@ function HabitCard({
         </svg>
       </div>
 
-      {/* Last 7 days */}
-      <div className="flex justify-between px-1">
+      {/* Last 7 days — dots are clickable to log/unlog any past day */}
+      <div className="flex justify-between px-1" onClick={e => e.stopPropagation()}>
         {last7.map(({ dateStr, dow }) => {
           const completed = logsByDate.has(dateStr);
           const due = isDue(habit, dow);
           const isToday = dateStr === today;
+          const isFuture = dateStr > today;
+          const alwaysDue = habit.frequency === 'daily' || habit.frequency === 'weekly_count';
+          const canInteract = !isFuture && (due || alwaysDue);
+
           let circleClass = '';
           let circleStyle = {};
-          const alwaysDue = habit.frequency === 'daily' || habit.frequency === 'weekly_count';
           if (completed) { circleStyle = { backgroundColor: habit.color }; }
-          else if (!due && !alwaysDue) { circleClass = 'bg-gray-100 dark:bg-gray-700/40 opacity-40'; }
+          else if (!due && !alwaysDue) { circleClass = 'bg-gray-100 dark:bg-zinc-800/40 opacity-40'; }
           else if (isToday) { circleClass = 'border-2 bg-transparent'; circleStyle = { borderColor: habit.color }; }
-          else { circleClass = 'bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'; }
+          else { circleClass = 'bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-gray-600'; }
+
+          const handleDotClick = () => {
+            if (!canInteract) return;
+            if (completed) {
+              const log = logsByDate.get(dateStr);
+              if (log) onUnlog(log.id);
+            } else {
+              onLog(habit.id, dateStr);
+            }
+          };
+
           return (
             <div key={dateStr} className="flex flex-col items-center gap-1">
-              <div className={`w-6 h-6 rounded-full transition-colors ${circleClass}`} style={circleStyle} />
+              <button
+                type="button"
+                onClick={handleDotClick}
+                disabled={!canInteract}
+                title={canInteract ? (completed ? 'Click to unlog' : 'Log for this day') : undefined}
+                className={`w-6 h-6 rounded-full transition-all ${circleClass} ${canInteract ? 'cursor-pointer hover:opacity-75 hover:scale-110' : 'cursor-default'}`}
+                style={circleStyle}
+                onMouseEnter={e => { if (canInteract && !completed) e.currentTarget.style.backgroundColor = habit.color + '55'; }}
+                onMouseLeave={e => { if (canInteract && !completed) e.currentTarget.style.backgroundColor = circleStyle.backgroundColor ?? ''; }}
+              />
               <span className={`text-xs ${isToday ? 'font-semibold text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
                 {DAY_LABELS[dow]}
               </span>
@@ -458,7 +481,7 @@ function HabitCard({
             title={todayLog ? 'Mark incomplete' : 'Mark complete'}
             className={`w-[52px] h-[52px] rounded-full flex items-center justify-center transition-colors duration-150
               ${celebrating ? 'animate-habit-pop' : ''}
-              ${todayLog ? 'text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600'}
+              ${todayLog ? 'text-white shadow-md' : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600'}
             `}
             style={todayLog ? { backgroundColor: habit.color } : {}}
             onMouseEnter={e => { if (!todayLog) e.currentTarget.style.backgroundColor = habit.color + '22'; }}
@@ -480,7 +503,7 @@ function HabitCard({
 
 function ArchivedHabitCard({ habit, onRestore }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 p-4 flex items-center gap-3 opacity-50 hover:opacity-70 transition-opacity">
+    <div className="bg-white dark:bg-[#09090b] rounded border border-gray-200 dark:border-zinc-800/60 p-4 flex items-center gap-3 opacity-50 hover:opacity-70 transition-opacity">
       <div className="w-1.5 self-stretch rounded-full flex-shrink-0" style={{ backgroundColor: habit.color }} />
       <span className="text-2xl leading-none flex-shrink-0">{habit.icon}</span>
       <div className="flex-1 min-w-0">
@@ -642,7 +665,7 @@ export function Habits() {
 
       {/* Archive toggle */}
       {!loading && (
-        <div className="mt-10 pt-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="mt-10 pt-6 border-t border-gray-200 dark:border-zinc-800/60">
           <button
             onClick={handleToggleArchived}
             className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"

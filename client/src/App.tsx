@@ -6,6 +6,8 @@ import { CalendarView } from './components/calendar/CalendarView';
 import { SectionPage } from './components/sections/SectionPage';
 import { PomodoroPanel } from './components/PomodoroPanel';
 import { CommandPalette } from './components/ui/CommandPalette';
+import { WelcomeScreen } from './components/ui/WelcomeScreen';
+import { DottedSurface } from './components/ui/dotted-surface';
 import { Today } from './pages/Today';
 import { Habits } from './pages/Habits';
 import { useNotes } from './hooks/useNotes';
@@ -14,6 +16,8 @@ import { useSections } from './hooks/useSections';
 import { useDarkMode } from './context/DarkModeContext';
 import { api } from './api';
 import type { Note, Task } from './types';
+
+const WELCOME_KEY = 'workspace_welcome_seen';
 
 type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | { type: 'section'; id: number };
 
@@ -31,8 +35,14 @@ function Icon({ d, d2, className = 'w-4 h-4 flex-shrink-0' }: { d: string; d2?: 
 // â”€â”€ App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function App() {
+  const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [view, setView] = useState<View>('today');
   const [collapsed, setCollapsed] = useState(false);
+
+  const handleDismissWelcome = () => {
+    localStorage.setItem(WELCOME_KEY, '1');
+    setShowWelcome(false);
+  };
   const { notes, loading: notesLoading, createNote, updateNoteInList, deleteNote } = useNotes();
   const { tasks, createTask, updateTask } = useTasksContext();
   const { sections, createSection, updateSection, deleteSection } = useSections();
@@ -125,8 +135,8 @@ export default function App() {
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1
         ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'}
         ${isActive(v)
-          ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-          : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+          ? 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400'
+          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'}`}
     >
       {icon}
       {!collapsed && label}
@@ -134,9 +144,9 @@ export default function App() {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+    <div className="flex h-screen bg-gray-50 dark:bg-[#111113] font-sans">
       {/* Sidebar */}
-      <aside className={`${collapsed ? 'w-14' : 'w-52'} flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden transition-all duration-300`}>
+      <aside className={`${collapsed ? 'w-14' : 'w-52'} flex-shrink-0 border-r border-gray-200 dark:border-white/[0.06] bg-white dark:bg-[#09090b] flex flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden transition-all duration-300`}>
 
         {/* Brand mark */}
         <div className={`flex items-center gap-2.5 mb-4 ${collapsed ? 'justify-center px-1' : 'px-2'}`}>
@@ -156,7 +166,7 @@ export default function App() {
         {!collapsed && (
           <>
             <div className="mt-4 mb-1 px-3">
-              <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Sections</p>
+              <p className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wide">Sections</p>
             </div>
             {sections.map(s => (
               <button
@@ -165,8 +175,8 @@ export default function App() {
                 className={`flex items-center gap-2 w-full px-3 py-2 rounded text-sm font-medium transition-colors
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1
                   ${isActive({ type: 'section', id: s.id })
-                    ? 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+                    ? 'bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/[0.06] dark:hover:text-zinc-100'}`}
               >
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
                 <span className="truncate">{s.name}</span>
@@ -179,7 +189,7 @@ export default function App() {
                 const s = await createSection(name.trim(), '#6366f1');
                 setView({ type: 'section', id: s.id });
               }}
-              className="flex items-center gap-2 w-full px-3 py-2 rounded text-sm text-gray-400 hover:text-teal-600 hover:bg-gray-100 dark:hover:bg-gray-800 dark:hover:text-teal-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
+              className="flex items-center gap-2 w-full px-3 py-2 rounded text-sm text-gray-400 hover:text-teal-600 hover:bg-gray-100 dark:text-zinc-500 dark:hover:text-teal-400 dark:hover:bg-white/[0.06] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
             >
               <Icon d="M12 4v16m8-8H4" className="w-3.5 h-3.5 flex-shrink-0" />
               New section
@@ -192,7 +202,7 @@ export default function App() {
           <button
             onClick={toggle}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            className={`flex items-center w-full rounded text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
+            className={`flex items-center w-full rounded text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-white/[0.06] transition-colors
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1
               ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2.5'}`}
           >
@@ -206,7 +216,7 @@ export default function App() {
           <button
             onClick={() => setCollapsed(c => !c)}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={`flex items-center w-full rounded text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors
+            className={`flex items-center w-full rounded text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-white/[0.06] transition-colors
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1
               ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-2.5 px-3 py-2.5'}`}
           >
@@ -219,7 +229,8 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden relative isolate">
+        {view === 'today' && <DottedSurface />}
         {view === 'today' && (
           <div className="flex-1 overflow-y-auto animate-fade-in">
             <Today onFocusTask={handleFocusTask} />
@@ -247,7 +258,7 @@ export default function App() {
               selectedId={selectedNoteId} onSelect={id => setSelectedNoteId(id)}
               onNew={() => handleNewNote()} onDelete={handleDeleteNote}
             />
-            <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-gray-800">
+            <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-[#111113]">
               {activeNote ? (
                 <NoteEditor
                   key={activeNote.id} note={activeNote} sections={sections}
@@ -290,6 +301,8 @@ export default function App() {
           onClose={() => setShowPalette(false)}
         />
       )}
+
+      {showWelcome && <WelcomeScreen onDismiss={handleDismissWelcome} />}
     </div>
   );
 }

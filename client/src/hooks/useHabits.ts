@@ -41,8 +41,9 @@ export function useHabits() {
     });
   };
 
-  const logHabit = async (habitId: number) => {
-    const entry = await api.habits.createLog({ habitId });
+  const logHabit = async (habitId: number, date?: string) => {
+    const completedAt = date ? `${date}T12:00:00` : undefined;
+    const entry = await api.habits.createLog({ habitId, completedAt });
     setLogs(prev => [...prev, entry]);
   };
 

@@ -18,8 +18,8 @@ interface NoteListProps {
 function SkeletonNoteItem() {
   return (
     <div className="p-3 rounded animate-pulse space-y-1.5">
-      <div className="h-3.5 bg-gray-200 dark:bg-gray-700 rounded w-4/5" />
-      <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
+      <div className="h-3.5 bg-gray-200 dark:bg-zinc-800 rounded w-4/5" />
+      <div className="h-3 bg-gray-200 dark:bg-zinc-800 rounded w-2/3" />
     </div>
   );
 }
@@ -36,8 +36,8 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
   })();
 
   return (
-    <div className="w-72 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full bg-white dark:bg-gray-900">
-      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+    <div className="w-72 flex-shrink-0 border-r border-gray-200 dark:border-zinc-800/60 flex flex-col h-full bg-white dark:bg-[#09090b]">
+      <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-zinc-800/60">
         <h2 className="font-semibold text-gray-800 dark:text-gray-100">Notes</h2>
         {/* CTA â€” matches Habits/Tasks button style */}
         <button
@@ -53,9 +53,9 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
       </div>
 
       {filterSectionId === undefined && sections.length > 0 && (
-        <div className="px-2 py-2 border-b border-gray-100 dark:border-gray-700 flex flex-wrap gap-1">
+        <div className="px-2 py-2 border-b border-gray-100 dark:border-zinc-800/60 flex flex-wrap gap-1">
           <button onClick={() => setSectionFilter('all')}
-            className={`px-2 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${sectionFilter === 'all' ? 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
+            className={`px-2 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${sectionFilter === 'all' ? 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-zinc-800 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
             All
           </button>
           {sections.map(s => (

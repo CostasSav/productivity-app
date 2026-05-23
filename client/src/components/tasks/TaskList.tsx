@@ -17,7 +17,7 @@ interface TaskListProps {
 
 function SkeletonTaskItem() {
   return (
-    <div className="flex items-start gap-3 p-4 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 animate-pulse">
+    <div className="flex items-start gap-3 p-4 rounded border border-gray-200/80 dark:border-zinc-800/60 bg-gray-100 dark:bg-[#09090b] animate-pulse">
       <div className="w-4 h-4 mt-1 rounded bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
       <div className="flex-1 space-y-2">
         <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />

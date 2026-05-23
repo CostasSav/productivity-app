@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTasksContext } from '../context/TasksContext';
 import { useSections } from '../hooks/useSections';
 import { usePomodoroSessions } from '../hooks/usePomodoroSessions';
@@ -6,6 +6,8 @@ import { useHabits } from '../hooks/useHabits';
 import { PriorityBadge } from '../components/ui/Badge';
 import { SectionBadge } from '../components/sections/SectionBadge';
 import { Spinner } from '../components/ui/Spinner';
+import { FloatingPaths } from '../components/ui/background-paths';
+import ScrollExpandMedia from '../components/ui/scroll-expansion-hero';
 import { isDue, localDateStr, logToLocalDate, calcCurrentStreak, getMonday, getWeekLogCount, weeklyCountRemaining } from '../utils/habitStats';
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
@@ -43,7 +45,7 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
 
   return (
     <div className={`relative flex items-start gap-3 p-4 rounded border transition-all duration-700
-      ${overdue && !isDone ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'}
+      ${overdue && !isDone ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white dark:border-zinc-800/60 dark:bg-[#09090b]'}
       ${visibilityClass}`}>
 
       <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: stripColor }} />
@@ -65,13 +67,13 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
           {section && <SectionBadge section={section} />}
           {task.deadline && (
             <span className={`text-xs font-medium font-mono tabular-nums ${overdue && !isDone ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-              {overdue && !isDone ? 'âš  Overdue: ' : 'Due: '}{formatDeadline(task.deadline)}
+              {overdue && !isDone ? '⚠️ Overdue: ' : 'Due: '}{formatDeadline(task.deadline)}
             </span>
           )}
           {pomodoroCount > 0 && (
             <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1"
               title={`${pomodoroCount} total Pomodoro session${pomodoroCount !== 1 ? 's' : ''}${pomodoroTodayCount > 0 ? `, ${pomodoroTodayCount} today` : ''}`}>
-              ðŸ… {pomodoroCount}
+              {'\u{1F345}'} {pomodoroCount}
               {pomodoroTodayCount > 0 && (
                 <span className="text-gray-300 dark:text-gray-600">({pomodoroTodayCount} today)</span>
               )}
@@ -149,7 +151,7 @@ function TodayHabitRow({ habit, todayLog, streak, weekCount, onLog, onUnlog }) {
   };
 
   return (
-    <div className="relative flex items-center gap-3 p-4 rounded border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+    <div className="relative flex items-center gap-3 p-4 rounded border border-gray-200 bg-white dark:border-zinc-800/60 dark:bg-[#09090b]">
       <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: habit.color }} />
       <span className="text-xl leading-none flex-shrink-0">{habit.icon}</span>
       <div className="flex-1 min-w-0">
@@ -279,37 +281,75 @@ export function Today({ onFocusTask }) {
     fading: fadingIds.has(task.id),
   });
 
+  const sessionToast = (
+    <div className={`fixed bottom-6 left-6 z-50 transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+      <div className="flex items-center gap-2.5 bg-gray-900 text-white px-4 py-3 rounded shadow-xl text-sm font-medium">
+        <svg className="w-4 h-4 text-red-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="10" />
+          <path fill="white" d="M9 9h2v6H9zm4 0h2v6h-2z" />
+        </svg>
+        Session complete! Take a 5-min break.
+      </div>
+    </div>
+  );
+
+  /* Full-screen scroll-expansion hero when today is clear */
+  if (isEmpty) {
+    return (
+      <>
+        <ScrollExpandMedia
+          mediaType="image"
+          mediaSrc="https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=1280&q=80"
+          bgImageSrc="https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=1920&q=80"
+          title="All Clear"
+          date={formatHeadingDate()}
+          scrollToExpand="Scroll to expand"
+        >
+          <div className="max-w-xl mx-auto text-center space-y-5 py-8">
+            <p className="text-6xl">&#x1F33F;</p>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Nothing due today</h2>
+            <p className="text-gray-500 dark:text-gray-400 leading-relaxed text-lg">
+              Your slate is clean. Pin tasks from your task list to build a focus list, or enjoy the quiet.
+            </p>
+          </div>
+        </ScrollExpandMedia>
+        {sessionToast}
+      </>
+    );
+  }
+
+  /* Normal layout */
   return (
     <div className="max-w-2xl mx-auto px-1 py-8 space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">{formatHeadingDate()}</h1>
-          {countParts.length > 0 && (
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">{countParts.join(' Â· ')}</p>
+
+      {/* Animated hero header */}
+      <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-neutral-950 border border-gray-100 dark:border-gray-800">
+        <div className="absolute inset-0 pointer-events-none">
+          <FloatingPaths position={1} />
+          <FloatingPaths position={-1} />
+        </div>
+        <div className="relative z-10 flex items-start justify-between gap-4 px-6 py-8">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">{formatHeadingDate()}</h1>
+            {countParts.length > 0 && (
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{countParts.join(' · ')}</p>
+            )}
+          </div>
+          {tasks.some(t => t.pinnedToday) && (
+            <button
+              onClick={handleClearPins}
+              className="flex-shrink-0 mt-1 text-xs text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+              title="Unpin all tasks from Today"
+            >
+              Clear all pins
+            </button>
           )}
         </div>
-        {tasks.some(t => t.pinnedToday) && (
-          <button
-            onClick={handleClearPins}
-            className="flex-shrink-0 mt-1 text-xs text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
-            title="Unpin all tasks from Today"
-          >
-            Clear all pins
-          </button>
-        )}
       </div>
 
       {(loading || habitsLoading) && <div className="flex justify-center py-12"><Spinner /></div>}
 
-      {isEmpty && (
-        <div className="text-center py-20 text-gray-400 dark:text-gray-500">
-          <p className="text-4xl mb-4">ðŸŒ¿</p>
-          <p className="text-base font-medium text-gray-500 dark:text-gray-400">Nothing due soon.</p>
-          <p className="text-sm mt-1">Pin tasks to build your focus list.</p>
-        </div>
-      )}
-
-      {!loading && !habitsLoading && !isEmpty && (
+      {!loading && !habitsLoading && (
         <>
           {focusList.length > 0 && (
             <section>
@@ -361,14 +401,7 @@ export function Today({ onFocusTask }) {
         </>
       )}
 
-      {/* Session complete toast */}
-      <div className={`fixed bottom-6 left-6 z-50 transition-all duration-500 ${showToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
-        <div className="flex items-center gap-2.5 bg-gray-900 text-white px-4 py-3 rounded shadow-xl text-sm font-medium">
-          <span className="text-base">ðŸ…</span>
-          Session complete! Take a 5-min break.
-        </div>
-      </div>
+      {sessionToast}
     </div>
   );
 }
-

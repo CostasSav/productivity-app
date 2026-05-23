@@ -36,13 +36,13 @@ function ExtractedTasksModal({ tasks, onConfirm, onClose }: {
 
   if (tasks.length === 0) {
     return (
-      <Modal title="Extract Tasks" onClose={onClose} footer={<button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>}>
+      <Modal title="Extract Tasks" onClose={onClose} footer={<button onClick={onClose} className="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-zinc-800 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600">Close</button>}>
         <p className="text-gray-500 dark:text-gray-400 text-center py-4">No tasks detected in this note.</p>
       </Modal>
     );
   }
 
-  const inputCls = 'border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100';
+  const inputCls = 'border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-500 dark:bg-zinc-800 dark:border-gray-600 dark:text-gray-100';
 
   return (
     <Modal
@@ -60,7 +60,7 @@ function ExtractedTasksModal({ tasks, onConfirm, onClose }: {
       <div className="space-y-3">
         {editable.map((task, i) => (
           <div key={i} className={`p-3 rounded border transition-colors
-            ${checked[i] ? 'border-teal-200 bg-teal-50 dark:border-teal-700 dark:bg-teal-900/20' : 'border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-700/30'}`}>
+            ${checked[i] ? 'border-teal-200 bg-teal-50 dark:border-teal-700 dark:bg-teal-900/20' : 'border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-zinc-800/30'}`}>
             <div className="flex items-start gap-3">
               <input type="checkbox" checked={checked[i]} onChange={() => setChecked(prev => prev.map((c, idx) => idx === i ? !c : c))} className="mt-1 accent-teal-600 cursor-pointer" />
               <div className="flex-1 space-y-2">
@@ -279,9 +279,9 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
         <SectionSelector sections={sections} value={sectionId} onChange={handleSectionChange} onCreateSection={onCreateSection} />
       </div>
 
-      <div className="flex items-center gap-1 px-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={() => setTab('edit')} className={`px-3 py-1 text-sm rounded-md font-medium ${tab === 'edit' ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>Edit</button>
-        <button onClick={() => setTab('preview')} className={`px-3 py-1 text-sm rounded-md font-medium ${tab === 'preview' ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>Preview</button>
+      <div className="flex items-center gap-1 px-6 pb-2 border-b border-gray-200 dark:border-zinc-800/60">
+        <button onClick={() => setTab('edit')} className={`px-3 py-1 text-sm rounded-md font-medium ${tab === 'edit' ? 'bg-gray-200 text-gray-800 dark:bg-zinc-800 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>Edit</button>
+        <button onClick={() => setTab('preview')} className={`px-3 py-1 text-sm rounded-md font-medium ${tab === 'preview' ? 'bg-gray-200 text-gray-800 dark:bg-zinc-800 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>Preview</button>
         <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">{saving ? 'Saving...' : 'Auto-saved'}</span>
       </div>
 
@@ -313,17 +313,25 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
         </div>
       )}
 
-      <div className="px-6 pb-4 flex gap-2 border-t border-gray-200 dark:border-gray-700 pt-3">
+      <div className="px-6 pb-4 flex gap-2 border-t border-gray-200 dark:border-zinc-800/60 pt-3">
         <button onClick={handleSummarize} disabled={summarizing || contentTooShort}
           className="flex items-center gap-2 px-3 py-2 text-sm bg-teal-600 text-white rounded hover:bg-teal-700 disabled:opacity-40"
           title={contentTooShort ? 'Note too short to summarize' : undefined}>
-          {summarizing ? <Spinner size="sm" /> : 'âœ¦'}
+          {summarizing ? <Spinner size="sm" /> : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+            </svg>
+          )}
           {summaryResult ? 'Re-summarize' : 'Summarize'}
         </button>
         <button onClick={handleExtract} disabled={extracting || contentTooShort}
           className="flex items-center gap-2 px-3 py-2 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40"
           title={contentTooShort ? 'Note too short for task extraction' : undefined}>
-          {extracting ? <Spinner size="sm" /> : 'âŠ•'}
+          {extracting ? <Spinner size="sm" /> : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          )}
           Extract Tasks
         </button>
       </div>

@@ -84,7 +84,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
     <>
       <div className={`flex items-start gap-3 p-4 rounded border transition-colors
         ${completing ? 'animate-task-done' : ''}
-        ${overdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700'}
+        ${overdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' : 'border-gray-200/80 bg-gray-100 hover:bg-gray-200/60 dark:border-zinc-800/60 dark:bg-[#09090b] dark:hover:bg-[#0e0e10]'}
         ${task.status === 'done' && !completing ? 'opacity-60' : ''}`}>
         <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${overdue ? 'bg-red-500' : PRIORITY_BORDER[task.priority]}`} />
 
