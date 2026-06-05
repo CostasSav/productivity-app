@@ -13,6 +13,8 @@ export interface Section {
   name: string;
   color: string;
   created_at: string;
+  updated_at?: string | null;
+  source?: string | null;
 }
 
 export interface Task {
@@ -87,6 +89,53 @@ export interface HabitLog {
   habitId: number;
   completedAt: string;
   note: string | null;
+}
+
+export interface GratitudeEntry {
+  id: number;
+  date: string;
+  items: string[];
+  mood: number | null;
+  completedAt: string;
+  durationSeconds: number;
+  streak: number;
+}
+
+export interface GratitudeSettings {
+  reminderEnabled: boolean;
+  reminderTime: string;
+  onboardingComplete: boolean;
+  totalEntries: number;
+  longestStreak: number;
+  currentStreak: number;
+}
+
+export const GROCERY_CATEGORIES = [
+  'Produce', 'Meat & Fish', 'Dairy & Eggs', 'Bakery',
+  'Frozen', 'Pantry', 'Drinks', 'Snacks',
+  'Cleaning', 'Personal Care', 'Other',
+] as const;
+
+export type GroceryCategory = typeof GROCERY_CATEGORIES[number];
+
+export interface GroceryItem {
+  id: number;
+  name: string;
+  quantity: number;
+  unit: string;
+  category: GroceryCategory;
+  checked: boolean;
+  addedAt: string;
+  note: string | null;
+  order: number;
+}
+
+export interface GroceryStaple {
+  id: number;
+  name: string;
+  quantity: number;
+  unit: string;
+  category: GroceryCategory;
 }
 
 export interface PomodoroSession {

@@ -13,6 +13,8 @@ export interface Section {
   name: string;
   color: string; // hex color, e.g. '#6366f1'
   created_at: string;
+  updated_at?: string | null;  // ISO timestamp; enables conflict detection with external bridges
+  source?: string | null;      // e.g. "vault:wiki/projects/<page>.md"; null = app-native
 }
 
 export interface Task {
@@ -67,6 +69,25 @@ export interface HabitLog {
   note: string | null;
 }
 
+export interface GratitudeEntry {
+  id: number;
+  date: string;             // YYYY-MM-DD, one per day max
+  items: string[];          // exactly 3 strings
+  mood: number | null;      // 1-5, recorded after ritual
+  completedAt: string;      // ISO timestamp
+  durationSeconds: number;
+  streak: number;           // consecutive-day streak, stored at save time
+}
+
+export interface GratitudeSettings {
+  reminderEnabled: boolean;
+  reminderTime: string;       // "HH:MM"
+  onboardingComplete: boolean;
+  totalEntries: number;
+  longestStreak: number;
+  currentStreak: number;
+}
+
 export interface Note {
   id: number;
   title: string;
@@ -75,4 +96,32 @@ export interface Note {
   section_id: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export const GROCERY_CATEGORIES = [
+  'Produce', 'Meat & Fish', 'Dairy & Eggs', 'Bakery',
+  'Frozen', 'Pantry', 'Drinks', 'Snacks',
+  'Cleaning', 'Personal Care', 'Other',
+] as const;
+
+export type GroceryCategory = typeof GROCERY_CATEGORIES[number];
+
+export interface GroceryItem {
+  id: number;
+  name: string;
+  quantity: number;
+  unit: string;
+  category: GroceryCategory;
+  checked: boolean;
+  addedAt: string;
+  note: string | null;
+  order: number;
+}
+
+export interface GroceryStaple {
+  id: number;
+  name: string;
+  quantity: number;
+  unit: string;
+  category: GroceryCategory;
 }

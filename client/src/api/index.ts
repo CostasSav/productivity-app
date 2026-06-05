@@ -1,4 +1,7 @@
-import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog } from '../types';
+import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple } from '../types';
+
+interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
+interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -64,6 +67,38 @@ export const api = {
     createLog: (data: { habitId: number; completedAt?: string; note?: string }) =>
       request<HabitLog>('/api/habit-logs', { method: 'POST', body: JSON.stringify(data) }),
     deleteLog: (id: number) => request<void>(`/api/habit-logs/${id}`, { method: 'DELETE' }),
+  },
+  gratitude: {
+    list: () => request<GratitudeEntry[]>('/api/gratitude'),
+    today: () => request<GratitudeEntry | null>('/api/gratitude/today'),
+    stats: () => request<GratitudeStats>('/api/gratitude/stats'),
+    save: (data: { items: string[]; mood: number | null; durationSeconds: number; completedAt?: string }) =>
+      request<GratitudeEntry>('/api/gratitude', { method: 'POST', body: JSON.stringify(data) }),
+  },
+  gratitudeSettings: {
+    get: () => request<GratitudeSettings>('/api/gratitude-settings'),
+    update: (data: Partial<GratitudeSettingsUpdate>) =>
+      request<GratitudeSettings>('/api/gratitude-settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  grocery: {
+    list: () => request<GroceryItem[]>('/api/grocery'),
+    add: (data: { name: string; quantity?: number; unit?: string; category?: string; note?: string }) =>
+      request<GroceryItem>('/api/grocery', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { name?: string; quantity?: number; unit?: string; checked?: boolean; note?: string | null; category?: string }) =>
+      request<GroceryItem>(`/api/grocery/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    reorder: (ids: number[]) => request<void>('/api/grocery/reorder', { method: 'PATCH', body: JSON.stringify({ ids }) }),
+    delete: (id: number) => request<void>(`/api/grocery/${id}`, { method: 'DELETE' }),
+    deleteChecked: () => request<{ removed: number }>('/api/grocery/checked', { method: 'DELETE' }),
+    clearAll: () => request<{ removed: number }>('/api/grocery/all', { method: 'DELETE', body: JSON.stringify({ confirm: true }) }),
+  },
+  groceryStaples: {
+    list: () => request<GroceryStaple[]>('/api/grocery/staples'),
+    add: (data: { name: string; quantity?: number; unit?: string; category?: string }) =>
+      request<GroceryStaple>('/api/grocery/staples', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { name?: string; quantity?: number; unit?: string; category?: string }) =>
+      request<GroceryStaple>(`/api/grocery/staples/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/api/grocery/staples/${id}`, { method: 'DELETE' }),
+    addToList: () => request<{ added: number; skipped: number }>('/api/grocery/staples/add-to-list', { method: 'POST' }),
   },
   ai: {
     summarize: (noteId: number) => request<SummaryResult>('/api/ai/summarize', { method: 'POST', body: JSON.stringify({ noteId }) }),

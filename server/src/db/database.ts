@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog } from '../types';
+import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory } from '../types';
+import { GROCERY_CATEGORIES } from '../types';
 
 const DB_PATH = path.join(__dirname, '../../data/db.json');
 
@@ -11,17 +12,36 @@ interface DbData {
   pomodoroSessions: PomodoroSession[];
   habits: Habit[];
   habitLogs: HabitLog[];
+  gratitudeEntries: GratitudeEntry[];
+  gratitudeSettings: GratitudeSettings;
+  groceryItems: GroceryItem[];
+  groceryStaples: GroceryStaple[];
   _sectionSeq: number;
   _taskSeq: number;
   _noteSeq: number;
   _sessionSeq: number;
   _habitSeq: number;
   _habitLogSeq: number;
+  _gratitudeSeq: number;
+  _groceryItemSeq: number;
+  _groceryStapleSeq: number;
 }
+
+const DEFAULT_GRATITUDE_SETTINGS: GratitudeSettings = {
+  reminderEnabled: true,
+  reminderTime: '21:00',
+  onboardingComplete: false,
+  totalEntries: 0,
+  longestStreak: 0,
+  currentStreak: 0,
+};
 
 const EMPTY: DbData = {
   sections: [], tasks: [], notes: [], pomodoroSessions: [], habits: [], habitLogs: [],
+  gratitudeEntries: [], gratitudeSettings: { ...DEFAULT_GRATITUDE_SETTINGS },
   _sectionSeq: 0, _taskSeq: 0, _noteSeq: 0, _sessionSeq: 0, _habitSeq: 0, _habitLogSeq: 0,
+  _gratitudeSeq: 0, _groceryItemSeq: 0, _groceryStapleSeq: 0,
+  groceryItems: [], groceryStaples: [],
 };
 
 function load(): DbData {
@@ -35,6 +55,29 @@ function load(): DbData {
     if (!raw.habitLogs) raw.habitLogs = [];
     if (raw._habitSeq === undefined) raw._habitSeq = 0;
     if (raw._habitLogSeq === undefined) raw._habitLogSeq = 0;
+    // Backfill sections that predate source / updated_at
+    if (Array.isArray(raw.sections)) {
+      raw.sections.forEach((s: any) => { s.source ??= null; s.updated_at ??= null; });
+    }
+    // Backfill gratitude data
+    if (!raw.gratitudeEntries) raw.gratitudeEntries = [];
+    if (raw._gratitudeSeq === undefined) raw._gratitudeSeq = 0;
+    if (!raw.gratitudeSettings) raw.gratitudeSettings = { ...DEFAULT_GRATITUDE_SETTINGS };
+    // Backfill grocery data
+    if (!raw.groceryItems) raw.groceryItems = [];
+    if (!raw.groceryStaples) raw.groceryStaples = [];
+    if (raw._groceryItemSeq === undefined) raw._groceryItemSeq = 0;
+    if (raw._groceryStapleSeq === undefined) raw._groceryStapleSeq = 0;
+    // Backfill order field within each category
+    if (Array.isArray(raw.groceryItems)) {
+      const catOrders: Record<string, number> = {};
+      raw.groceryItems.forEach((item: any) => {
+        if (item.order === undefined) {
+          catOrders[item.category] = catOrders[item.category] ?? 0;
+          item.order = catOrders[item.category]++;
+        }
+      });
+    }
     // Migrate habits that predate the order field
     if (Array.isArray(raw.habits)) {
       raw.habits = (raw.habits as any[]).map((h: any, i: number) => ({
@@ -73,6 +116,37 @@ export function nextDeadline(deadline: string, recurrence: RecurrenceType): stri
     d.setDate(Math.min(day, lastDay));
   }
   return d.toISOString().split('T')[0];
+}
+
+/** Count consecutive days ending on `asOf` that have a gratitude entry. */
+function calcStreak(entries: GratitudeEntry[], asOf: string): number {
+  const dateSet = new Set(entries.map(e => e.date));
+  let streak = 0;
+  let cur = asOf;
+  while (dateSet.has(cur)) {
+    streak++;
+    const d = new Date(cur + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    cur = d.toISOString().split('T')[0];
+  }
+  return streak;
+}
+
+function sortGroceryItems(a: GroceryItem, b: GroceryItem): number {
+  const ai = GROCERY_CATEGORIES.indexOf(a.category as typeof GROCERY_CATEGORIES[number]);
+  const bi = GROCERY_CATEGORIES.indexOf(b.category as typeof GROCERY_CATEGORIES[number]);
+  if (ai !== bi) return ai - bi;
+  return a.order - b.order;
+}
+
+function sortGrocery(a: { category: string; name: string }, b: { category: string; name: string }): number {
+  if (a.category !== b.category) return a.category < b.category ? -1 : 1;
+  return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+}
+
+/** Write any in-memory migrations (backfills applied inside load()) back to disk. */
+export function flushMigrations() {
+  save(load());
 }
 
 export const db = {
@@ -356,5 +430,198 @@ export const db = {
     if (data.habitLogs.length === before) return false;
     save(data);
     return true;
+  },
+
+  // ── Gratitude entries ─────────────────────────────────
+  getGratitudeEntries(): GratitudeEntry[] {
+    return [...load().gratitudeEntries].sort((a, b) => (a.date < b.date ? 1 : -1));
+  },
+
+  getTodayGratitudeEntry(today: string): GratitudeEntry | null {
+    return load().gratitudeEntries.find(e => e.date === today) ?? null;
+  },
+
+  /** Create or update today's entry, then recalculate streaks in settings. */
+  saveGratitudeEntry(fields: {
+    date: string;
+    items: string[];
+    mood: number | null;
+    completedAt: string;
+    durationSeconds: number;
+  }): GratitudeEntry {
+    const data = load();
+    const existing = data.gratitudeEntries.findIndex(e => e.date === fields.date);
+    const streak = calcStreak(
+      // Include today's date in the set before counting
+      existing === -1
+        ? [...data.gratitudeEntries, { date: fields.date } as GratitudeEntry]
+        : data.gratitudeEntries,
+      fields.date,
+    );
+
+    let entry: GratitudeEntry;
+    if (existing !== -1) {
+      data.gratitudeEntries[existing] = { ...data.gratitudeEntries[existing], ...fields, streak };
+      entry = data.gratitudeEntries[existing];
+    } else {
+      data._gratitudeSeq += 1;
+      entry = { ...fields, id: data._gratitudeSeq, streak };
+      data.gratitudeEntries.push(entry);
+      data.gratitudeSettings.totalEntries += 1;
+    }
+
+    data.gratitudeSettings.currentStreak = streak;
+    if (streak > data.gratitudeSettings.longestStreak) {
+      data.gratitudeSettings.longestStreak = streak;
+    }
+
+    save(data);
+    return entry;
+  },
+
+  // ── Gratitude settings ────────────────────────────────
+  getGratitudeSettings(): GratitudeSettings {
+    return load().gratitudeSettings;
+  },
+
+  updateGratitudeSettings(fields: Partial<Pick<GratitudeSettings, 'reminderEnabled' | 'reminderTime' | 'onboardingComplete' | 'currentStreak'>>): GratitudeSettings {
+    const data = load();
+    data.gratitudeSettings = { ...data.gratitudeSettings, ...fields };
+    save(data);
+    return data.gratitudeSettings;
+  },
+
+  // ── Grocery items ─────────────────────────────────────
+  getGroceryItems(): GroceryItem[] {
+    return [...load().groceryItems].sort(sortGroceryItems);
+  },
+
+  addGroceryItem(fields: { name: string; quantity: number; unit: string; category: GroceryCategory; note?: string | null }): GroceryItem {
+    const data = load();
+    data._groceryItemSeq += 1;
+    const catItems = data.groceryItems.filter(i => i.category === fields.category);
+    const maxOrder = catItems.reduce((max, i) => Math.max(max, i.order), -1);
+    const item: GroceryItem = {
+      id: data._groceryItemSeq,
+      name: fields.name,
+      quantity: fields.quantity,
+      unit: fields.unit,
+      category: fields.category,
+      checked: false,
+      addedAt: now(),
+      note: fields.note ?? null,
+      order: maxOrder + 1,
+    };
+    data.groceryItems.push(item);
+    save(data);
+    return item;
+  },
+
+  updateGroceryItem(id: number, fields: Partial<Pick<GroceryItem, 'name' | 'quantity' | 'unit' | 'checked' | 'note' | 'category'>>): GroceryItem | undefined {
+    const data = load();
+    const idx = data.groceryItems.findIndex(i => i.id === id);
+    if (idx === -1) return undefined;
+    data.groceryItems[idx] = { ...data.groceryItems[idx], ...fields };
+    save(data);
+    return data.groceryItems[idx];
+  },
+
+  deleteGroceryItem(id: number): boolean {
+    const data = load();
+    const before = data.groceryItems.length;
+    data.groceryItems = data.groceryItems.filter(i => i.id !== id);
+    if (data.groceryItems.length === before) return false;
+    save(data);
+    return true;
+  },
+
+  deleteCheckedGroceryItems(): number {
+    const data = load();
+    const before = data.groceryItems.length;
+    data.groceryItems = data.groceryItems.filter(i => !i.checked);
+    const removed = before - data.groceryItems.length;
+    if (removed > 0) save(data);
+    return removed;
+  },
+
+  clearGroceryList(): number {
+    const data = load();
+    const count = data.groceryItems.length;
+    data.groceryItems = [];
+    data._groceryItemSeq = 0;
+    if (count > 0) save(data);
+    return count;
+  },
+
+  // ── Grocery staples ───────────────────────────────────
+  getGroceryStaples(): GroceryStaple[] {
+    return [...load().groceryStaples].sort(sortGrocery);
+  },
+
+  addGroceryStaple(fields: { name: string; quantity: number; unit: string; category: GroceryCategory }): GroceryStaple {
+    const data = load();
+    data._groceryStapleSeq += 1;
+    const staple: GroceryStaple = { id: data._groceryStapleSeq, ...fields };
+    data.groceryStaples.push(staple);
+    save(data);
+    return staple;
+  },
+
+  updateGroceryStaple(id: number, fields: Partial<Pick<GroceryStaple, 'name' | 'quantity' | 'unit' | 'category'>>): GroceryStaple | undefined {
+    const data = load();
+    const idx = data.groceryStaples.findIndex(s => s.id === id);
+    if (idx === -1) return undefined;
+    data.groceryStaples[idx] = { ...data.groceryStaples[idx], ...fields };
+    save(data);
+    return data.groceryStaples[idx];
+  },
+
+  deleteGroceryStaple(id: number): boolean {
+    const data = load();
+    const before = data.groceryStaples.length;
+    data.groceryStaples = data.groceryStaples.filter(s => s.id !== id);
+    if (data.groceryStaples.length === before) return false;
+    save(data);
+    return true;
+  },
+
+  addStaplesToList(): { added: number; skipped: number } {
+    const data = load();
+    const existingNames = new Set(data.groceryItems.map(i => i.name.toLowerCase()));
+    let added = 0;
+    let skipped = 0;
+    for (const staple of data.groceryStaples) {
+      if (existingNames.has(staple.name.toLowerCase())) {
+        skipped++;
+        continue;
+      }
+      data._groceryItemSeq += 1;
+      const catItems = data.groceryItems.filter(i => i.category === staple.category);
+      const maxOrder = catItems.reduce((max, i) => Math.max(max, i.order), -1);
+      data.groceryItems.push({
+        id: data._groceryItemSeq,
+        name: staple.name,
+        quantity: staple.quantity,
+        unit: staple.unit,
+        category: staple.category,
+        checked: false,
+        addedAt: now(),
+        note: null,
+        order: maxOrder + 1,
+      });
+      existingNames.add(staple.name.toLowerCase());
+      added++;
+    }
+    if (added > 0) save(data);
+    return { added, skipped };
+  },
+
+  reorderGroceryItems(ids: number[]): void {
+    const data = load();
+    ids.forEach((id, index) => {
+      const item = data.groceryItems.find(i => i.id === id);
+      if (item) item.order = index;
+    });
+    save(data);
   },
 };

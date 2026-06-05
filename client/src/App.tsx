@@ -10,6 +10,9 @@ import { WelcomeScreen } from './components/ui/WelcomeScreen';
 import { DottedSurface } from './components/ui/dotted-surface';
 import { Today } from './pages/Today';
 import { Habits } from './pages/Habits';
+import { Gratitude } from './pages/Gratitude';
+import { Settings } from './pages/Settings';
+import { Grocery } from './pages/Grocery';
 import { useNotes } from './hooks/useNotes';
 import { useTasksContext } from './context/TasksContext';
 import { useSections } from './hooks/useSections';
@@ -19,9 +22,9 @@ import type { Note, Task } from './types';
 
 const WELCOME_KEY = 'workspace_welcome_seen';
 
-type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | { type: 'section'; id: number };
+type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | 'gratitude' | 'grocery' | 'settings' | { type: 'section'; id: number };
 
-// â”€â”€ Inline SVG icon helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Inline SVG icon helper â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function Icon({ d, d2, className = 'w-4 h-4 flex-shrink-0' }: { d: string; d2?: string; className?: string }) {
   return (
@@ -32,7 +35,7 @@ function Icon({ d, d2, className = 'w-4 h-4 flex-shrink-0' }: { d: string; d2?: 
   );
 }
 
-// â”€â”€ App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ App â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function App() {
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
@@ -52,6 +55,8 @@ export default function App() {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const { dark, toggle } = useDarkMode();
+  const [moreExpanded, setMoreExpanded] = useState(() => localStorage.getItem('sidebar_more_expanded') === 'true');
+  const [sectionsExpanded, setSectionsExpanded] = useState(() => localStorage.getItem('sidebar_sections_expanded') === 'true');
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -67,6 +72,42 @@ export default function App() {
   useEffect(() => {
     if (!selectedNoteId && notes.length > 0) setSelectedNoteId(notes[0].id);
   }, [notes]);
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const s = await api.gratitudeSettings.get();
+        if (s.reminderEnabled && 'Notification' in window) {
+          const asked = localStorage.getItem('notif_permission_asked');
+          if (!asked) {
+            localStorage.setItem('notif_permission_asked', '1');
+            Notification.requestPermission().catch(() => {});
+          }
+        }
+      } catch {}
+    };
+    init();
+
+    const interval = setInterval(async () => {
+      try {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        const s = await api.gratitudeSettings.get();
+        if (!s.reminderEnabled) return;
+        const [h, m] = (s.reminderTime || '21:00').split(':').map(Number);
+        const now = new Date();
+        if (now.getHours() !== h || now.getMinutes() !== m) return;
+        const entry = await api.gratitude.today();
+        if (!entry) {
+          const notif = new Notification('Evening gratitude 🌿', {
+            body: '2 minutes to reflect on your day.',
+          });
+          notif.onclick = () => window.focus();
+        }
+      } catch {}
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!selectedNoteId) { setActiveNote(null); return; }
@@ -156,19 +197,49 @@ export default function App() {
           {!collapsed && <h1 className="text-sm font-bold text-gray-900 dark:text-white truncate">My Workspace</h1>}
         </div>
 
-        {navBtn('today',    'Today',    <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />)}
+        {/* Main nav - always visible */}
         {navBtn('tasks',    'Tasks',    <Icon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />)}
+        {navBtn('today',    'Today',    <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />)}
         {navBtn('calendar', 'Calendar', <Icon d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />)}
-        {navBtn('notes',    'Notes',    <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
         {navBtn('habits',   'Habits',   <Icon d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />)}
 
-        {/* Sections â€” hidden when collapsed */}
+        {/* Notes + Gratitude: icon-only in collapsed sidebar, else behind "More" toggle */}
+        {collapsed && navBtn('notes', 'Notes', <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
+        {collapsed && navBtn('gratitude', 'Gratitude', <Icon d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />)}
+        {collapsed && navBtn('grocery', 'Grocery', <Icon d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />)}
+
+        {/* "More" expandable area - only in expanded sidebar */}
+        {!collapsed && (
+          <div className="mt-2">
+            <button
+              onClick={() => {
+                const next = !moreExpanded;
+                setMoreExpanded(next);
+                localStorage.setItem('sidebar_more_expanded', String(next));
+              }}
+              className="flex items-center w-full px-3 py-1 text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wide hover:text-gray-600 dark:hover:text-zinc-300 transition-colors cursor-pointer rounded"
+            >
+              <span>More</span>
+              <svg
+                className={`w-3 h-3 ml-auto transition-transform duration-200 ${moreExpanded ? 'rotate-0' : '-rotate-90'}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {moreExpanded && navBtn('notes', 'Notes', <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
+            {moreExpanded && navBtn('gratitude', 'Gratitude', <Icon d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />)}
+            {moreExpanded && navBtn('grocery', 'Grocery', <Icon d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />)}
+          </div>
+        )}
+
+        {/* Sections - hidden when collapsed */}
         {!collapsed && (
           <>
             <div className="mt-4 mb-1 px-3">
               <p className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wide">Sections</p>
             </div>
-            {sections.map(s => (
+            {(sectionsExpanded ? sections : sections.slice(0, 4)).map(s => (
               <button
                 key={s.id}
                 onClick={() => setView({ type: 'section', id: s.id })}
@@ -182,6 +253,20 @@ export default function App() {
                 <span className="truncate">{s.name}</span>
               </button>
             ))}
+            {sections.length > 4 && (
+              <button
+                onClick={() => {
+                  const next = !sectionsExpanded;
+                  setSectionsExpanded(next);
+                  localStorage.setItem('sidebar_sections_expanded', String(next));
+                }}
+                className="flex items-center gap-1.5 w-full px-3 py-1.5 rounded text-xs text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+              >
+                {sectionsExpanded
+                  ? <><Icon d="M5 15l7-7 7 7" className="w-3 h-3 flex-shrink-0" /> Show less</>
+                  : <><Icon d="M19 9l-7 7-7-7" className="w-3 h-3 flex-shrink-0" /> {sections.length - 4} more</>}
+              </button>
+            )}
             <button
               onClick={async () => {
                 const name = prompt('Section name:');
@@ -199,6 +284,7 @@ export default function App() {
 
         {/* Bottom controls */}
         <div className="mt-auto flex flex-col gap-1 pt-2">
+          {navBtn('settings', 'Settings', <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" d2="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />)}
           <button
             onClick={toggle}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -225,6 +311,7 @@ export default function App() {
             </svg>
             {!collapsed && 'Collapse'}
           </button>
+
         </div>
       </aside>
 
@@ -233,7 +320,7 @@ export default function App() {
         {view === 'today' && <DottedSurface />}
         {view === 'today' && (
           <div className="flex-1 overflow-y-auto animate-fade-in">
-            <Today onFocusTask={handleFocusTask} />
+            <Today onFocusTask={handleFocusTask} onNavigateGratitude={() => setView('gratitude')} onNavigateGrocery={() => setView('grocery')} />
           </div>
         )}
         {view === 'tasks' && (
@@ -249,6 +336,21 @@ export default function App() {
         {view === 'habits' && (
           <div className="flex-1 overflow-y-auto animate-fade-in">
             <Habits />
+          </div>
+        )}
+        {view === 'gratitude' && (
+          <div className="flex-1 overflow-y-auto animate-fade-in flex flex-col">
+            <Gratitude />
+          </div>
+        )}
+        {view === 'settings' && (
+          <div className="flex-1 overflow-y-auto animate-fade-in">
+            <Settings />
+          </div>
+        )}
+        {view === 'grocery' && (
+          <div className="flex-1 flex overflow-hidden animate-fade-in">
+            <Grocery />
           </div>
         )}
         {view === 'notes' && (
@@ -303,6 +405,7 @@ export default function App() {
       )}
 
       {showWelcome && <WelcomeScreen onDismiss={handleDismissWelcome} />}
+
     </div>
   );
 }

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(copy \"c:\\\\Users\\\\ConstantinosSAVVIDIS\\\\TestClaudeCode\\\\server\\\\data\\\\db.json\" \"c:\\\\Users\\\\ConstantinosSAVVIDIS\\\\TestClaudeCode\\\\server\\\\data\\\\db.backup.2026-06-01.json\")",
+      "Bash(git stash *)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

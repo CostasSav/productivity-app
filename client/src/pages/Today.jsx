@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTasksContext } from '../context/TasksContext';
 import { useSections } from '../hooks/useSections';
 import { usePomodoroSessions } from '../hooks/usePomodoroSessions';
@@ -9,6 +9,7 @@ import { Spinner } from '../components/ui/Spinner';
 import { FloatingPaths } from '../components/ui/background-paths';
 import ScrollExpandMedia from '../components/ui/scroll-expansion-hero';
 import { isDue, localDateStr, logToLocalDate, calcCurrentStreak, getMonday, getWeekLogCount, weeklyCountRemaining } from '../utils/habitStats';
+import { api } from '../api';
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const PRIORITY_FALLBACK = { high: '#f87171', medium: '#fbbf24', low: '#4ade80' };
@@ -180,7 +181,7 @@ function TodayHabitRow({ habit, todayLog, streak, weekCount, onLog, onUnlog }) {
   );
 }
 
-export function Today({ onFocusTask }) {
+export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery }) {
   const { tasks, loading, updateTask, toggleSubtask } = useTasksContext();
   const { sections } = useSections();
   const { totalByTaskId, todayByTaskId } = usePomodoroSessions();
@@ -188,6 +189,18 @@ export function Today({ onFocusTask }) {
   const [fadingIds, setFadingIds] = useState(new Set());
   const [showToast, setShowToast] = useState(false);
   const toastTimerRef = useRef(null);
+  const [gratitudeEntry, setGratitudeEntry] = useState(undefined);
+  const [gratitudeSettings, setGratitudeSettings] = useState(null);
+  const [groceryItems, setGroceryItems] = useState(null); // null = loading
+  const [groceryQuickAdd, setGroceryQuickAdd] = useState('');
+  const [groceryAdding, setGroceryAdding] = useState(false);
+
+  useEffect(() => {
+    Promise.all([api.gratitude.today(), api.gratitudeSettings.get()])
+      .then(([entry, s]) => { setGratitudeEntry(entry); setGratitudeSettings(s); })
+      .catch(() => { setGratitudeEntry(null); setGratitudeSettings(null); });
+    api.grocery.list().then(setGroceryItems).catch(() => setGroceryItems([]));
+  }, []);
 
   const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -217,6 +230,13 @@ export function Today({ onFocusTask }) {
     return result;
   }, [updateTask]);
 
+  const isAfterReminderTime = useMemo(() => {
+    if (!gratitudeSettings?.reminderTime) return false;
+    const [h, m] = gratitudeSettings.reminderTime.split(':').map(Number);
+    const now = new Date();
+    return now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m);
+  }, [gratitudeSettings]);
+
   const todayStr = localDateStr();
   const todayDow = new Date().getDay();
 
@@ -245,6 +265,9 @@ export function Today({ onFocusTask }) {
   const suggested = tasks
     .filter(t => (t.status !== 'done' || fadingIds.has(t.id)) && !t.pinnedToday && t.deadline && t.deadline <= in3Days)
     .sort((a, b) => {
+      const aOver = isOverdue(a) ? 0 : 1;
+      const bOver = isOverdue(b) ? 0 : 1;
+      if (aOver !== bOver) return aOver - bOver;
       const pa = PRIORITY_ORDER[a.priority] ?? 1;
       const pb = PRIORITY_ORDER[b.priority] ?? 1;
       if (pa !== pb) return pa - pb;
@@ -252,11 +275,29 @@ export function Today({ onFocusTask }) {
     })
     .slice(0, 10);
 
-  const focusList = tasks.filter(t => t.pinnedToday && (t.status !== 'done' || fadingIds.has(t.id)));
+  const focusList = tasks
+    .filter(t => t.pinnedToday && (t.status !== 'done' || fadingIds.has(t.id)))
+    .sort((a, b) => (isOverdue(a) ? 0 : 1) - (isOverdue(b) ? 0 : 1));
 
   const activeFocusCount = focusList.filter(t => t.status !== 'done').length;
   const activeSuggestedCount = suggested.filter(t => t.status !== 'done').length;
-  const isEmpty = focusList.length === 0 && suggested.length === 0 && habitsToday.length === 0 && !loading && !habitsLoading;
+  const gratitudePending = gratitudeEntry === null;
+  const isEmpty = focusList.length === 0 && suggested.length === 0 && habitsToday.length === 0
+    && !loading && !habitsLoading && gratitudeEntry !== undefined && !gratitudePending;
+
+  const handleGroceryQuickAdd = async (e) => {
+    e.preventDefault();
+    const name = groceryQuickAdd.trim();
+    if (!name) return;
+    setGroceryAdding(true);
+    try {
+      await api.grocery.add({ name });
+      setGroceryItems(prev => [...(prev ?? []), { id: Date.now(), name, checked: false }]);
+      setGroceryQuickAdd('');
+    } finally {
+      setGroceryAdding(false);
+    }
+  };
 
   const handleClearPins = async () => {
     const pinned = tasks.filter(t => t.pinnedToday);
@@ -269,6 +310,8 @@ export function Today({ onFocusTask }) {
   if (activeFocusCount > 0) countParts.push(`${activeFocusCount} ${activeFocusCount === 1 ? 'task' : 'tasks'} in focus`);
   if (activeSuggestedCount > 0) countParts.push(`${activeSuggestedCount} suggested`);
   if (activeHabitsToday.length > 0) countParts.push(`${activeHabitsToday.length} ${activeHabitsToday.length === 1 ? 'habit' : 'habits'} due`);
+  if (gratitudeEntry) countParts.push('gratitude ✓');
+  else if (gratitudeEntry === null) countParts.push('gratitude pending');
 
   const cardProps = task => ({
     task,
@@ -399,6 +442,96 @@ export function Today({ onFocusTask }) {
             </section>
           )}
         </>
+      )}
+
+      {/* Grocery card */}
+      {groceryItems !== null && (() => {
+        const uncheckedCount = groceryItems.filter(i => !i.checked).length;
+        const clear = groceryItems.length === 0;
+        return (
+          <section>
+            <div className="flex flex-col gap-2.5 px-4 py-3.5 rounded border border-gray-200 bg-white dark:border-zinc-800/60 dark:bg-[#09090b]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-gray-400 dark:text-zinc-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  {clear ? (
+                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Grocery list is clear ✓</span>
+                  ) : (
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                      {uncheckedCount} item{uncheckedCount !== 1 ? 's' : ''} to buy
+                    </span>
+                  )}
+                </div>
+                {onNavigateGrocery && (
+                  <button
+                    onClick={onNavigateGrocery}
+                    className="text-xs font-medium text-teal-600 dark:text-teal-400 hover:underline underline-offset-2 transition-colors cursor-pointer flex-shrink-0"
+                  >
+                    Go to list →
+                  </button>
+                )}
+              </div>
+              <form onSubmit={handleGroceryQuickAdd} className="flex gap-2">
+                <input
+                  value={groceryQuickAdd}
+                  onChange={e => setGroceryQuickAdd(e.target.value)}
+                  placeholder="Quick add item..."
+                  className="flex-1 bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!groceryQuickAdd.trim() || groceryAdding}
+                  className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-30 text-white text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                >
+                  {groceryAdding ? '…' : 'Add'}
+                </button>
+              </form>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* Gratitude card */}
+      {gratitudeEntry !== undefined && (
+        <section>
+          {gratitudeEntry ? (
+            <div className="flex items-center gap-3 px-4 py-3.5 rounded border border-teal-100 bg-teal-50 dark:border-teal-900/30 dark:bg-teal-900/10">
+              <svg className="w-4 h-4 text-teal-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-sm font-medium text-teal-700 dark:text-teal-400">Gratitude done</span>
+              {gratitudeEntry.streak > 0 && (
+                <span className="text-xs text-teal-600 dark:text-teal-500">
+                  · {gratitudeEntry.streak} day streak 🔥
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className={`flex items-center justify-between px-4 py-3.5 rounded border transition-colors ${
+              isAfterReminderTime
+                ? 'border-teal-200 bg-teal-50 dark:border-teal-800/40 dark:bg-teal-900/10'
+                : 'border-gray-200 bg-white dark:border-zinc-800/60 dark:bg-[#09090b]'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                {isAfterReminderTime && (
+                  <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse flex-shrink-0" />
+                )}
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Evening gratitude 🌿</span>
+                <span className="text-xs text-gray-400 dark:text-zinc-500">2 min</span>
+              </div>
+              {onNavigateGratitude && (
+                <button
+                  onClick={onNavigateGratitude}
+                  className="text-xs font-medium text-teal-600 dark:text-teal-400 hover:underline underline-offset-2 transition-colors cursor-pointer flex-shrink-0"
+                >
+                  Start ritual
+                </button>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       {sessionToast}
