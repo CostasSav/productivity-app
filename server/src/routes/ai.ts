@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from '../db/database';
+import { anthropic } from '../ai/client';
 import { summarizeNote } from '../ai/summarize';
 import { extractTasksFromNote } from '../ai/extractTasks';
 import type { ExtractedTask } from '../ai/extractTasks';
@@ -48,6 +49,65 @@ router.post('/extract-tasks', async (req, res) => {
   try {
     const result = await extractTasksFromNote(note.content);
     res.json(result);
+  } catch (err) {
+    handleAiError(err, res);
+  }
+});
+
+router.post('/explain-term', async (req, res) => {
+  const { term } = req.body;
+  if (!term || typeof term !== 'string' || !term.trim()) {
+    res.status(400).json({ error: 'term is required' }); return;
+  }
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: `Explain the concept or word "${term.trim()}" in 2–3 simple sentences as if explaining to a curious adult. Be concrete and give one real-world example. Do not use the word itself in the definition. Respond with only the explanation, no preamble, no quotation marks around the explanation.`,
+      }],
+    });
+    const explanation = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text?.trim() ?? '';
+    res.json({ explanation });
+  } catch (err) {
+    handleAiError(err, res);
+  }
+});
+
+router.post('/quiz-insight', async (req, res) => {
+  const { score, total, missedTerms } = req.body as {
+    score: number;
+    total: number;
+    missedTerms: Array<{ term: string; definition: string }>;
+  };
+  if (typeof score !== 'number' || typeof total !== 'number' || !Array.isArray(missedTerms)) {
+    res.status(400).json({ error: 'score, total, and missedTerms are required' }); return;
+  }
+  if (missedTerms.length === 0) {
+    res.json({ insight: 'Outstanding — you recalled every single term perfectly.' }); return;
+  }
+  try {
+    const missedList = missedTerms.map(t => `- ${t.term}: ${t.definition}`).join('\n');
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 150,
+      system: [
+        {
+          type: 'text',
+          text: `You are a learning coach helping someone review vocabulary and concepts from books they have read.\n\nThe user missed these terms in their quiz:\n${missedList}`,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      messages: [
+        {
+          role: 'user',
+          content: `The user scored ${score} out of ${total} on their retention quiz. Write 2 sentences maximum: one acknowledging their score warmly, and one practical tip for better retaining the specific concepts they missed. Be concise and encouraging, not generic.`,
+        },
+      ],
+    });
+    const insight = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')?.text?.trim() ?? '';
+    res.json({ insight });
   } catch (err) {
     handleAiError(err, res);
   }

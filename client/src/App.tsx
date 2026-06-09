@@ -13,6 +13,8 @@ import { Habits } from './pages/Habits';
 import { Gratitude } from './pages/Gratitude';
 import { Settings } from './pages/Settings';
 import { Grocery } from './pages/Grocery';
+import { Sleep } from './pages/Sleep';
+import { Bibliotheca } from './pages/Bibliotheca';
 import { useNotes } from './hooks/useNotes';
 import { useTasksContext } from './context/TasksContext';
 import { useSections } from './hooks/useSections';
@@ -22,7 +24,7 @@ import type { Note, Task } from './types';
 
 const WELCOME_KEY = 'workspace_welcome_seen';
 
-type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | 'gratitude' | 'grocery' | 'settings' | { type: 'section'; id: number };
+type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | 'gratitude' | 'grocery' | 'sleep' | 'bibliotheca' | 'settings' | { type: 'section'; id: number };
 
 // â"€â"€ Inline SVG icon helper â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
@@ -57,6 +59,8 @@ export default function App() {
   const { dark, toggle } = useDarkMode();
   const [moreExpanded, setMoreExpanded] = useState(() => localStorage.getItem('sidebar_more_expanded') === 'true');
   const [sectionsExpanded, setSectionsExpanded] = useState(() => localStorage.getItem('sidebar_sections_expanded') === 'true');
+  const [missingSleepEntry, setMissingSleepEntry] = useState(false);
+  const [sleepBannerVisible, setSleepBannerVisible] = useState(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -113,6 +117,20 @@ export default function App() {
     if (!selectedNoteId) { setActiveNote(null); return; }
     api.notes.get(selectedNoteId).then(setActiveNote).catch(() => {});
   }, [selectedNoteId]);
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 6 || hour >= 12) return;
+    const today = new Date().toISOString().split('T')[0];
+    const dismissed = localStorage.getItem('sleepBannerDismissedDate');
+    if (dismissed === today) return;
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    const yStr = yest.toISOString().split('T')[0];
+    api.sleep.getByDate(yStr).then(entry => {
+      if (!entry) { setMissingSleepEntry(true); setSleepBannerVisible(true); }
+    }).catch(() => {});
+  }, []);
 
   const handleNewNote = async (sectionId?: number | null) => {
     const note = await createNote({ title: 'New Note', content: '', section_id: sectionId ?? null });
@@ -207,6 +225,13 @@ export default function App() {
         {collapsed && navBtn('notes', 'Notes', <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
         {collapsed && navBtn('gratitude', 'Gratitude', <Icon d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />)}
         {collapsed && navBtn('grocery', 'Grocery', <Icon d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />)}
+        {collapsed && (
+          <div className="relative">
+            {navBtn('sleep', 'Sleep', <Icon d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />)}
+            {missingSleepEntry && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 pointer-events-none" />}
+          </div>
+        )}
+        {collapsed && navBtn('bibliotheca', 'Bibliotheca', <Icon d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />)}
 
         {/* "More" expandable area - only in expanded sidebar */}
         {!collapsed && (
@@ -230,6 +255,13 @@ export default function App() {
             {moreExpanded && navBtn('notes', 'Notes', <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
             {moreExpanded && navBtn('gratitude', 'Gratitude', <Icon d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />)}
             {moreExpanded && navBtn('grocery', 'Grocery', <Icon d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />)}
+            {moreExpanded && (
+              <div className="relative">
+                {navBtn('sleep', 'Sleep', <Icon d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />)}
+                {missingSleepEntry && <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-amber-400 pointer-events-none" />}
+              </div>
+            )}
+            {moreExpanded && navBtn('bibliotheca', 'Bibliotheca', <Icon d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />)}
           </div>
         )}
 
@@ -316,11 +348,40 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex overflow-hidden relative isolate">
+      <main className="flex-1 flex flex-col overflow-hidden relative isolate">
+
+        {/* Morning sleep log reminder banner */}
+        {sleepBannerVisible && (
+          <div className="flex-shrink-0 flex items-center justify-between px-4 py-2.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800/40 z-10">
+            <span className="text-sm text-amber-800 dark:text-amber-200">🌙 Don't forget to log last night's sleep</span>
+            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+              <button
+                onClick={() => setView('sleep')}
+                className="text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+              >
+                Log now
+              </button>
+              <button
+                onClick={() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  localStorage.setItem('sleepBannerDismissedDate', today);
+                  setSleepBannerVisible(false);
+                }}
+                className="text-lg leading-none text-amber-400 hover:text-amber-700 dark:hover:text-amber-200 cursor-pointer"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* View content */}
+        <div className="flex-1 flex overflow-hidden relative">
         {view === 'today' && <DottedSurface />}
         {view === 'today' && (
           <div className="flex-1 overflow-y-auto animate-fade-in">
-            <Today onFocusTask={handleFocusTask} onNavigateGratitude={() => setView('gratitude')} onNavigateGrocery={() => setView('grocery')} />
+            <Today onFocusTask={handleFocusTask} onNavigateGratitude={() => setView('gratitude')} onNavigateGrocery={() => setView('grocery')} onNavigateSleep={() => setView('sleep')} />
           </div>
         )}
         {view === 'tasks' && (
@@ -351,6 +412,25 @@ export default function App() {
         {view === 'grocery' && (
           <div className="flex-1 flex overflow-hidden animate-fade-in">
             <Grocery />
+          </div>
+        )}
+        {view === 'sleep' && (
+          <div className="flex-1 flex overflow-hidden animate-fade-in">
+            <Sleep onEntrySaved={(date: string) => {
+              const yest = new Date();
+              yest.setDate(yest.getDate() - 1);
+              const yStr = yest.toISOString().split('T')[0];
+              const tStr = new Date().toISOString().split('T')[0];
+              if (date === yStr || date === tStr) {
+                setMissingSleepEntry(false);
+                setSleepBannerVisible(false);
+              }
+            }} />
+          </div>
+        )}
+        {view === 'bibliotheca' && (
+          <div className="flex-1 flex overflow-hidden animate-fade-in">
+            <Bibliotheca />
           </div>
         )}
         {view === 'notes' && (
@@ -387,6 +467,7 @@ export default function App() {
             />
           </div>
         )}
+        </div>{/* end view content */}
       </main>
 
       {focusTask && (

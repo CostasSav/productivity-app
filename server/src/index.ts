@@ -12,6 +12,8 @@ import habitsRouter from './routes/habits';
 import habitLogsRouter from './routes/habitLogs';
 import { gratitudeRouter, gratitudeSettingsRouter } from './routes/gratitude';
 import { groceryRouter, groceryStaplesRouter } from './routes/grocery';
+import { sleepRouter, sleepSettingsRouter } from './routes/sleep';
+import { booksRouter, bookNotesRouter, bookQuotesRouter, bookLearningsRouter, bibliothecaSettingsRouter } from './routes/bibliotheca';
 import { db, flushMigrations } from './db/database';
 
 const dataDir = path.join(__dirname, '../data');
@@ -36,6 +38,13 @@ app.use('/api/gratitude', gratitudeRouter);
 app.use('/api/gratitude-settings', gratitudeSettingsRouter);
 app.use('/api/grocery/staples', groceryStaplesRouter);
 app.use('/api/grocery', groceryRouter);
+app.use('/api/sleep-settings', sleepSettingsRouter);
+app.use('/api/sleep', sleepRouter);
+app.use('/api/bibliotheca-settings', bibliothecaSettingsRouter);
+app.use('/api/books', booksRouter);
+app.use('/api/book-notes', bookNotesRouter);
+app.use('/api/book-quotes', bookQuotesRouter);
+app.use('/api/book-learnings', bookLearningsRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

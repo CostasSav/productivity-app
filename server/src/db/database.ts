@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory } from '../types';
+import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory, SleepEntry, SleepSettings, SleepStats, Book, BookNote, BookQuote, BookLearning, BibliothecaSettings, BookStats, BookWithCounts, BookStatus } from '../types';
 import { GROCERY_CATEGORIES } from '../types';
 
 const DB_PATH = path.join(__dirname, '../../data/db.json');
@@ -16,6 +16,13 @@ interface DbData {
   gratitudeSettings: GratitudeSettings;
   groceryItems: GroceryItem[];
   groceryStaples: GroceryStaple[];
+  sleepEntries: SleepEntry[];
+  sleepSettings: SleepSettings;
+  books: Book[];
+  bookNotes: BookNote[];
+  bookQuotes: BookQuote[];
+  bookLearnings: BookLearning[];
+  bibliothecaSettings: BibliothecaSettings;
   _sectionSeq: number;
   _taskSeq: number;
   _noteSeq: number;
@@ -25,6 +32,11 @@ interface DbData {
   _gratitudeSeq: number;
   _groceryItemSeq: number;
   _groceryStapleSeq: number;
+  _sleepSeq: number;
+  _bookSeq: number;
+  _bookNoteSeq: number;
+  _bookQuoteSeq: number;
+  _bookLearningSeq: number;
 }
 
 const DEFAULT_GRATITUDE_SETTINGS: GratitudeSettings = {
@@ -40,8 +52,13 @@ const EMPTY: DbData = {
   sections: [], tasks: [], notes: [], pomodoroSessions: [], habits: [], habitLogs: [],
   gratitudeEntries: [], gratitudeSettings: { ...DEFAULT_GRATITUDE_SETTINGS },
   _sectionSeq: 0, _taskSeq: 0, _noteSeq: 0, _sessionSeq: 0, _habitSeq: 0, _habitLogSeq: 0,
-  _gratitudeSeq: 0, _groceryItemSeq: 0, _groceryStapleSeq: 0,
+  _gratitudeSeq: 0, _groceryItemSeq: 0, _groceryStapleSeq: 0, _sleepSeq: 0,
   groceryItems: [], groceryStaples: [],
+  sleepEntries: [],
+  sleepSettings: { sleepTarget: 7.5, weekStartsOn: 1, aiInsightLastGenerated: null, aiInsightText: null },
+  books: [], bookNotes: [], bookQuotes: [], bookLearnings: [],
+  bibliothecaSettings: { yearlyGoal: 12, currentYear: new Date().getFullYear() },
+  _bookSeq: 0, _bookNoteSeq: 0, _bookQuoteSeq: 0, _bookLearningSeq: 0,
 };
 
 function load(): DbData {
@@ -68,6 +85,20 @@ function load(): DbData {
     if (!raw.groceryStaples) raw.groceryStaples = [];
     if (raw._groceryItemSeq === undefined) raw._groceryItemSeq = 0;
     if (raw._groceryStapleSeq === undefined) raw._groceryStapleSeq = 0;
+    // Backfill sleep data
+    if (!raw.sleepEntries) raw.sleepEntries = [];
+    if (raw._sleepSeq === undefined) raw._sleepSeq = 0;
+    if (!raw.sleepSettings) raw.sleepSettings = { sleepTarget: 7.5, weekStartsOn: 1, aiInsightLastGenerated: null, aiInsightText: null };
+    // Backfill bibliotheca data
+    if (!raw.books) raw.books = [];
+    if (!raw.bookNotes) raw.bookNotes = [];
+    if (!raw.bookQuotes) raw.bookQuotes = [];
+    if (!raw.bookLearnings) raw.bookLearnings = [];
+    if (!raw.bibliothecaSettings) raw.bibliothecaSettings = { yearlyGoal: 12, currentYear: new Date().getFullYear() };
+    if (raw._bookSeq === undefined) raw._bookSeq = 0;
+    if (raw._bookNoteSeq === undefined) raw._bookNoteSeq = 0;
+    if (raw._bookQuoteSeq === undefined) raw._bookQuoteSeq = 0;
+    if (raw._bookLearningSeq === undefined) raw._bookLearningSeq = 0;
     // Backfill order field within each category
     if (Array.isArray(raw.groceryItems)) {
       const catOrders: Record<string, number> = {};
@@ -130,6 +161,108 @@ function calcStreak(entries: GratitudeEntry[], asOf: string): number {
     cur = d.toISOString().split('T')[0];
   }
   return streak;
+}
+
+// ── Sleep helpers ─────────────────────────────────────────────────────────────
+
+function timeToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/** Bedtimes before noon are treated as early-morning (next day), shift by 24h for std-dev math. */
+function normalizeBedtimeMinutes(hhmm: string): number {
+  const m = timeToMinutes(hhmm);
+  return m < 720 ? m + 1440 : m;
+}
+
+function calcDurationMinutes(bedtime: string, wakeTime: string): number {
+  const bed = timeToMinutes(bedtime);
+  const wake = timeToMinutes(wakeTime);
+  return wake >= bed ? wake - bed : (1440 - bed) + wake;
+}
+
+function stdDev(values: number[]): number {
+  if (values.length < 2) return 0;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function avgOrNull(values: number[]): number | null {
+  if (!values.length) return null;
+  return Math.round(values.reduce((s, v) => s + v, 0) / values.length);
+}
+
+function calcSleepStreaks(entries: SleepEntry[]): { current: number; longest: number } {
+  if (!entries.length) return { current: 0, longest: 0 };
+  const dates = new Set(entries.map(e => e.date));
+  const today = new Date().toISOString().split('T')[0];
+
+  let current = 0;
+  const d = new Date(today + 'T12:00:00');
+  while (dates.has(d.toISOString().split('T')[0])) {
+    current++;
+    d.setDate(d.getDate() - 1);
+  }
+
+  const sorted = [...dates].sort();
+  let longest = sorted.length ? 1 : 0;
+  let streak = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(sorted[i - 1] + 'T12:00:00');
+    const curr = new Date(sorted[i] + 'T12:00:00');
+    const diffDays = Math.round((curr.getTime() - prev.getTime()) / 86400000);
+    if (diffDays === 1) { streak++; longest = Math.max(longest, streak); }
+    else streak = 1;
+  }
+  return { current, longest };
+}
+
+function computeSleepStats(entries: SleepEntry[], settings: SleepSettings): SleepStats {
+  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+  const last7   = sorted.slice(0, 7);
+  const last14  = sorted.slice(0, 14);
+  const last30  = sorted.slice(0, 30);
+
+  const averageDuration7d  = avgOrNull(last7.map(e => e.durationMinutes));
+  const averageDuration30d = avgOrNull(last30.map(e => e.durationMinutes));
+  const q7 = last7.map(e => e.quality).filter(Boolean);
+  const averageQuality7d   = q7.length ? Math.round((q7.reduce((s, v) => s + v, 0) / q7.length) * 10) / 10 : null;
+
+  // Sleep debt
+  const targetMin = settings.sleepTarget * 60;
+  const currentSleepDebt = Math.max(0, last14
+    .reduce((sum, e) => sum + Math.max(0, targetMin - e.durationMinutes), 0));
+
+  // Consistency score
+  const withTimes = last14.filter(e => e.bedtime && e.wakeTime);
+  let consistencyScore = 100;
+  if (withTimes.length >= 2) {
+    const bedStd  = stdDev(withTimes.map(e => normalizeBedtimeMinutes(e.bedtime)));
+    const wakeStd = stdDev(withTimes.map(e => timeToMinutes(e.wakeTime)));
+    const avgStd  = (bedStd + wakeStd) / 2;
+    consistencyScore = Math.round(Math.max(0, 100 - Math.min(100, (avgStd / 60) * 25)));
+  }
+
+  // Weekday / weekend averages (last 30)
+  const last30WithDur = last30.filter(e => e.durationMinutes != null);
+  const weekdayDurs   = last30WithDur.filter(e => { const d = new Date(e.date + 'T12:00:00').getDay(); return d >= 1 && d <= 5; }).map(e => e.durationMinutes);
+  const weekendDurs   = last30WithDur.filter(e => { const d = new Date(e.date + 'T12:00:00').getDay(); return d === 0 || d === 6; }).map(e => e.durationMinutes);
+
+  const { current: currentStreak, longest: longestStreak } = calcSleepStreaks(entries);
+
+  return {
+    averageDuration7d,
+    averageDuration30d,
+    averageQuality7d,
+    currentSleepDebt: Math.round(currentSleepDebt),
+    consistencyScore,
+    weekdayAvgDuration: avgOrNull(weekdayDurs),
+    weekendAvgDuration: avgOrNull(weekendDurs),
+    longestStreak,
+    currentStreak,
+  };
 }
 
 function sortGroceryItems(a: GroceryItem, b: GroceryItem): number {
@@ -623,5 +756,363 @@ export const db = {
       if (item) item.order = index;
     });
     save(data);
+  },
+
+  // ── Sleep entries ─────────────────────────────────────
+  getSleepEntries(): SleepEntry[] {
+    return [...load().sleepEntries].sort((a, b) => b.date.localeCompare(a.date));
+  },
+
+  getSleepEntry(date: string): SleepEntry | undefined {
+    return load().sleepEntries.find(e => e.date === date);
+  },
+
+  upsertSleepEntry(fields: {
+    date: string; bedtime: string; wakeTime: string;
+    quality: number; energy: number; note?: string | null;
+  }): SleepEntry {
+    const data = load();
+    const durationMinutes = calcDurationMinutes(fields.bedtime, fields.wakeTime);
+    const existing = data.sleepEntries.findIndex(e => e.date === fields.date);
+    if (existing !== -1) {
+      data.sleepEntries[existing] = {
+        ...data.sleepEntries[existing],
+        bedtime: fields.bedtime,
+        wakeTime: fields.wakeTime,
+        durationMinutes,
+        quality: fields.quality,
+        energy: fields.energy,
+        note: fields.note ?? null,
+      };
+      save(data);
+      return data.sleepEntries[existing];
+    }
+    data._sleepSeq += 1;
+    const entry: SleepEntry = {
+      id: data._sleepSeq,
+      date: fields.date,
+      bedtime: fields.bedtime,
+      wakeTime: fields.wakeTime,
+      durationMinutes,
+      quality: fields.quality,
+      energy: fields.energy,
+      note: fields.note ?? null,
+      createdAt: now(),
+    };
+    data.sleepEntries.push(entry);
+    save(data);
+    return entry;
+  },
+
+  deleteSleepEntry(date: string): boolean {
+    const data = load();
+    const before = data.sleepEntries.length;
+    data.sleepEntries = data.sleepEntries.filter(e => e.date !== date);
+    if (data.sleepEntries.length === before) return false;
+    save(data);
+    return true;
+  },
+
+  getSleepStats(): SleepStats {
+    const data = load();
+    return computeSleepStats(data.sleepEntries, data.sleepSettings);
+  },
+
+  // ── Sleep settings ────────────────────────────────────
+  getSleepSettings(): SleepSettings {
+    return { ...load().sleepSettings };
+  },
+
+  updateSleepSettings(fields: Partial<SleepSettings>): SleepSettings {
+    const data = load();
+    data.sleepSettings = { ...data.sleepSettings, ...fields };
+    save(data);
+    return data.sleepSettings;
+  },
+
+  // ── Bibliotheca — Books ───────────────────────────────
+
+  getBooks(params?: { status?: BookStatus; search?: string }): BookWithCounts[] {
+    const data = load();
+    let books = data.books as Book[];
+    if (params?.status) {
+      books = books.filter(b => b.status === params.status);
+    }
+    if (params?.search) {
+      const q = params.search.toLowerCase();
+      books = books.filter(b =>
+        b.title.toLowerCase().includes(q) ||
+        b.author.toLowerCase().includes(q) ||
+        (b.genre ?? '').toLowerCase().includes(q) ||
+        b.tags.some(t => t.toLowerCase().includes(q))
+      );
+    }
+    return books
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(b => ({
+        ...b,
+        notesCount: data.bookNotes.filter(n => n.bookId === b.id).length,
+        quotesCount: data.bookQuotes.filter(q => q.bookId === b.id).length,
+        learningsCount: data.bookLearnings.filter(l => l.bookId === b.id).length,
+      }));
+  },
+
+  getBook(id: number): BookWithCounts | undefined {
+    const data = load();
+    const b = data.books.find(b => b.id === id);
+    if (!b) return undefined;
+    return {
+      ...b,
+      notesCount: data.bookNotes.filter(n => n.bookId === id).length,
+      quotesCount: data.bookQuotes.filter(q => q.bookId === id).length,
+      learningsCount: data.bookLearnings.filter(l => l.bookId === id).length,
+    };
+  },
+
+  createBook(fields: Omit<Book, 'id' | 'createdAt'>): Book {
+    const data = load();
+    data._bookSeq += 1;
+    // Assign want-to-read order if relevant
+    let wantToReadOrder = fields.wantToReadOrder ?? 0;
+    if (fields.status === 'want-to-read' && !fields.wantToReadOrder) {
+      const maxOrder = data.books
+        .filter(b => b.status === 'want-to-read')
+        .reduce((m, b) => Math.max(m, b.wantToReadOrder), -1);
+      wantToReadOrder = maxOrder + 1;
+    }
+    const book: Book = {
+      ...fields,
+      wantToReadOrder,
+      id: data._bookSeq,
+      createdAt: now(),
+    };
+    data.books.push(book);
+    save(data);
+    return book;
+  },
+
+  updateBook(id: number, fields: Partial<Omit<Book, 'id' | 'createdAt'>>): Book | undefined {
+    const data = load();
+    const idx = data.books.findIndex(b => b.id === id);
+    if (idx === -1) return undefined;
+    data.books[idx] = { ...data.books[idx], ...fields };
+    save(data);
+    return data.books[idx];
+  },
+
+  deleteBook(id: number): boolean {
+    const data = load();
+    const before = data.books.length;
+    data.books = data.books.filter(b => b.id !== id);
+    if (data.books.length === before) return false;
+    // Cascade delete
+    data.bookNotes = data.bookNotes.filter(n => n.bookId !== id);
+    data.bookQuotes = data.bookQuotes.filter(q => q.bookId !== id);
+    data.bookLearnings = data.bookLearnings.filter(l => l.bookId !== id);
+    save(data);
+    return true;
+  },
+
+  getBookStats(): BookStats {
+    const data = load();
+    const finished = data.books.filter(b => b.status === 'finished');
+    const thisYear = new Date().getFullYear();
+    const finishedThisYear = finished.filter(b => {
+      if (!b.finishedAt) return false;
+      return new Date(b.finishedAt).getFullYear() === thisYear;
+    }).length;
+
+    const rated = finished.filter(b => b.rating != null);
+    const averageRating = rated.length
+      ? Math.round((rated.reduce((s, b) => s + b.rating!, 0) / rated.length) * 10) / 10
+      : null;
+
+    const totalPages = finished.reduce((s, b) => s + (b.totalPages ?? 0), 0);
+
+    // byGenre: count all books (any status) with a genre
+    const genreMap = new Map<string, number>();
+    for (const b of data.books) {
+      if (b.genre) genreMap.set(b.genre, (genreMap.get(b.genre) ?? 0) + 1);
+    }
+    const byGenre = [...genreMap.entries()]
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // byYear: finished books grouped by year of finishedAt
+    const yearMap = new Map<number, number>();
+    for (const b of finished) {
+      if (b.finishedAt) {
+        const yr = new Date(b.finishedAt).getFullYear();
+        yearMap.set(yr, (yearMap.get(yr) ?? 0) + 1);
+      }
+    }
+    const byYear = [...yearMap.entries()]
+      .map(([year, count]) => ({ year, count }))
+      .sort((a, b) => b.year - a.year);
+
+    return {
+      totalFinished: finished.length,
+      finishedThisYear,
+      yearlyGoal: data.bibliothecaSettings.yearlyGoal,
+      averageRating,
+      totalPages,
+      byGenre,
+      byYear,
+      totalQuotes: data.bookQuotes.length,
+      totalLearnings: data.bookLearnings.length,
+      currentlyReading: data.books.filter(b => b.status === 'reading'),
+    };
+  },
+
+  // ── Bibliotheca — Notes ───────────────────────────────
+
+  getBookNotes(bookId: number): BookNote[] {
+    return load().bookNotes
+      .filter(n => n.bookId === bookId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  createBookNote(fields: { bookId: number; content: string; pageNumber?: number | null }): BookNote {
+    const data = load();
+    data._bookNoteSeq += 1;
+    const note: BookNote = {
+      id: data._bookNoteSeq,
+      bookId: fields.bookId,
+      content: fields.content,
+      pageNumber: fields.pageNumber ?? null,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    data.bookNotes.push(note);
+    save(data);
+    return note;
+  },
+
+  updateBookNote(id: number, fields: { content?: string; pageNumber?: number | null }): BookNote | undefined {
+    const data = load();
+    const idx = data.bookNotes.findIndex(n => n.id === id);
+    if (idx === -1) return undefined;
+    data.bookNotes[idx] = { ...data.bookNotes[idx], ...fields, updatedAt: now() };
+    save(data);
+    return data.bookNotes[idx];
+  },
+
+  deleteBookNote(id: number): boolean {
+    const data = load();
+    const before = data.bookNotes.length;
+    data.bookNotes = data.bookNotes.filter(n => n.id !== id);
+    if (data.bookNotes.length === before) return false;
+    save(data);
+    return true;
+  },
+
+  // ── Bibliotheca — Quotes ──────────────────────────────
+
+  getBookQuotes(bookId: number): BookQuote[] {
+    return load().bookQuotes
+      .filter(q => q.bookId === bookId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  getRandomBookQuote(): (BookQuote & { bookTitle: string; bookAuthor: string }) | null {
+    const data = load();
+    if (!data.bookQuotes.length) return null;
+    const q = data.bookQuotes[Math.floor(Math.random() * data.bookQuotes.length)];
+    const book = data.books.find(b => b.id === q.bookId);
+    return {
+      ...q,
+      bookTitle: book?.title ?? '',
+      bookAuthor: book?.author ?? '',
+    };
+  },
+
+  createBookQuote(fields: { bookId: number; text: string; pageNumber?: number | null }): BookQuote {
+    const data = load();
+    data._bookQuoteSeq += 1;
+    const quote: BookQuote = {
+      id: data._bookQuoteSeq,
+      bookId: fields.bookId,
+      text: fields.text,
+      pageNumber: fields.pageNumber ?? null,
+      createdAt: now(),
+    };
+    data.bookQuotes.push(quote);
+    save(data);
+    return quote;
+  },
+
+  deleteBookQuote(id: number): boolean {
+    const data = load();
+    const before = data.bookQuotes.length;
+    data.bookQuotes = data.bookQuotes.filter(q => q.id !== id);
+    if (data.bookQuotes.length === before) return false;
+    save(data);
+    return true;
+  },
+
+  // ── Bibliotheca — Learnings ───────────────────────────
+
+  getBookLearnings(params?: { bookId?: number; search?: string }): BookLearning[] {
+    const data = load();
+    let items = data.bookLearnings as BookLearning[];
+    if (params?.bookId != null) {
+      items = items.filter(l => l.bookId === params.bookId);
+    }
+    if (params?.search) {
+      const q = params.search.toLowerCase();
+      items = items.filter(l =>
+        l.term.toLowerCase().includes(q) ||
+        l.definition.toLowerCase().includes(q)
+      );
+    }
+    return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  createBookLearning(fields: { bookId: number; term: string; definition: string; pageNumber?: number | null }): BookLearning {
+    const data = load();
+    data._bookLearningSeq += 1;
+    const learning: BookLearning = {
+      id: data._bookLearningSeq,
+      bookId: fields.bookId,
+      term: fields.term,
+      definition: fields.definition,
+      pageNumber: fields.pageNumber ?? null,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    data.bookLearnings.push(learning);
+    save(data);
+    return learning;
+  },
+
+  updateBookLearning(id: number, fields: { term?: string; definition?: string; pageNumber?: number | null }): BookLearning | undefined {
+    const data = load();
+    const idx = data.bookLearnings.findIndex(l => l.id === id);
+    if (idx === -1) return undefined;
+    data.bookLearnings[idx] = { ...data.bookLearnings[idx], ...fields, updatedAt: now() };
+    save(data);
+    return data.bookLearnings[idx];
+  },
+
+  deleteBookLearning(id: number): boolean {
+    const data = load();
+    const before = data.bookLearnings.length;
+    data.bookLearnings = data.bookLearnings.filter(l => l.id !== id);
+    if (data.bookLearnings.length === before) return false;
+    save(data);
+    return true;
+  },
+
+  // ── Bibliotheca — Settings ────────────────────────────
+
+  getBibliothecaSettings(): BibliothecaSettings {
+    return { ...load().bibliothecaSettings };
+  },
+
+  updateBibliothecaSettings(fields: Partial<BibliothecaSettings>): BibliothecaSettings {
+    const data = load();
+    data.bibliothecaSettings = { ...data.bibliothecaSettings, ...fields };
+    save(data);
+    return data.bibliothecaSettings;
   },
 };

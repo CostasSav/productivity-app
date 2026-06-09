@@ -110,6 +110,37 @@ export interface GratitudeSettings {
   currentStreak: number;
 }
 
+export interface SleepEntry {
+  id: number;
+  date: string;
+  bedtime: string;
+  wakeTime: string;
+  durationMinutes: number;
+  quality: number;
+  energy: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface SleepSettings {
+  sleepTarget: number;
+  weekStartsOn: 0 | 1;
+  aiInsightLastGenerated: string | null;
+  aiInsightText: string | null;
+}
+
+export interface SleepStats {
+  averageDuration7d: number | null;
+  averageDuration30d: number | null;
+  averageQuality7d: number | null;
+  currentSleepDebt: number;
+  consistencyScore: number;
+  weekdayAvgDuration: number | null;
+  weekendAvgDuration: number | null;
+  longestStreak: number;
+  currentStreak: number;
+}
+
 export const GROCERY_CATEGORIES = [
   'Produce', 'Meat & Fish', 'Dairy & Eggs', 'Bakery',
   'Frozen', 'Pantry', 'Drinks', 'Snacks',
@@ -145,4 +176,93 @@ export interface PomodoroSession {
   startedAt: string;
   completedAt: string;
   type: 'work' | 'break';
+}
+
+// ── Bibliotheca ───────────────────────────────────────────────────────────────
+
+export type BookStatus = 'reading' | 'finished' | 'want-to-read' | 'dnf';
+
+export interface Book {
+  id: number;
+  title: string;
+  author: string;
+  coverUrl: string | null;
+  openLibraryKey: string | null;
+  totalPages: number | null;
+  currentPage: number;
+  status: BookStatus;
+  rating: number | null;
+  genre: string | null;
+  tags: string[];
+  synopsis: string | null;
+  dnfReason: string | null;
+  recommendedBy: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  wantToReadOrder: number;
+  createdAt: string;
+}
+
+export interface BookWithCounts extends Book {
+  notesCount: number;
+  quotesCount: number;
+  learningsCount: number;
+}
+
+export interface BookNote {
+  id: number;
+  bookId: number;
+  content: string;
+  pageNumber: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookQuote {
+  id: number;
+  bookId: number;
+  text: string;
+  pageNumber: number | null;
+  createdAt: string;
+}
+
+export interface BookQuoteWithBook extends BookQuote {
+  bookTitle: string;
+  bookAuthor: string;
+}
+
+export interface BookLearning {
+  id: number;
+  bookId: number;
+  term: string;
+  definition: string;
+  pageNumber: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BibliothecaSettings {
+  yearlyGoal: number;
+  currentYear: number;
+}
+
+export interface BookStats {
+  totalFinished: number;
+  finishedThisYear: number;
+  yearlyGoal: number;
+  averageRating: number | null;
+  totalPages: number;
+  byGenre: { genre: string; count: number }[];
+  byYear: { year: number; count: number }[];
+  totalQuotes: number;
+  totalLearnings: number;
+  currentlyReading: Book[];
+}
+
+export interface OpenLibraryResult {
+  title: string;
+  author: string;
+  coverUrl: string | null;
+  openLibraryKey: string | null;
+  totalPages: number | null;
 }

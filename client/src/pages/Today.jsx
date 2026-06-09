@@ -23,6 +23,42 @@ function formatDeadline(d) {
   return new Date(d + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ── Sleep helpers ─────────────────────────────────────────────────────────────
+
+function yesterdayStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split('T')[0];
+}
+
+function lastNDaysList(n) {
+  const days = [];
+  const today = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
+}
+
+const SLEEP_MOON = ['🌑', '🌒', '🌓', '🌔', '🌕'];
+const SLEEP_QUALITY_LABEL = ['Poor', 'Fair', 'Okay', 'Good', 'Great'];
+const SLEEP_ENERGY_LABEL = ['Drained', 'Low', 'Okay', 'Good', 'Energised'];
+
+function calcSleepDuration(bedtime, wakeTime) {
+  if (!bedtime || !wakeTime) return null;
+  const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const bed = toMin(bedtime), wake = toMin(wakeTime);
+  return wake >= bed ? wake - bed : (1440 - bed) + wake;
+}
+
+function formatSleepDuration(minutes) {
+  if (minutes == null || minutes < 0) return null;
+  const h = Math.floor(minutes / 60), m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 function formatHeadingDate() {
   const now = new Date();
   const weekday = now.toLocaleDateString(undefined, { weekday: 'long' });
@@ -181,7 +217,200 @@ function TodayHabitRow({ habit, todayLog, streak, weekCount, onLog, onUnlog }) {
   );
 }
 
-export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery }) {
+// ── Sleep card ────────────────────────────────────────────────────────────────
+
+function SleepSparkline({ entries }) {
+  const days = lastNDaysList(7);
+  const byDate = {};
+  entries.forEach(e => { byDate[e.date] = e; });
+  return (
+    <div className="flex items-center gap-1" title="Last 7 nights">
+      {days.map(date => {
+        const e = byDate[date];
+        const dur = e?.durationMinutes ?? null;
+        const cls = dur == null ? 'bg-gray-200 dark:bg-zinc-700'
+          : dur < 360 ? 'bg-red-400'
+          : dur < 420 ? 'bg-amber-400'
+          : 'bg-teal-400';
+        return <div key={date} className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cls}`} title={dur != null ? formatSleepDuration(dur) : 'No entry'} />;
+      })}
+    </div>
+  );
+}
+
+function TodaySleepCard({ entry, stats, allEntries, onSaved, onNavigateSleep }) {
+  const [bedtime, setBedtime] = useState('');
+  const [wakeTime, setWakeTime] = useState('');
+  const [quality, setQuality] = useState(null);
+  const [energy, setEnergy] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const duration = calcSleepDuration(bedtime, wakeTime);
+  const canSave = bedtime && wakeTime && quality != null;
+
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    try {
+      const saved = await api.sleep.save({
+        date: yesterdayStr(),
+        bedtime,
+        wakeTime,
+        quality,
+        energy: energy ?? 3,
+      });
+      onSaved(saved);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const debtMin = stats?.currentSleepDebt ?? 0;
+  const debtCls = debtMin === 0 ? 'text-teal-600 dark:text-teal-400'
+    : debtMin < 60 ? 'text-teal-600 dark:text-teal-400'
+    : debtMin < 120 ? 'text-amber-500 dark:text-amber-400'
+    : 'text-red-500 dark:text-red-400';
+
+  const MoonIcon = () => (
+    <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+    </svg>
+  );
+
+  if (entry) {
+    return (
+      <div className="flex flex-col gap-2.5 px-4 py-3.5 rounded border border-gray-200 bg-white dark:border-zinc-800/60 dark:bg-[#09090b]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-gray-400 dark:text-zinc-500">
+            <MoonIcon />
+            <span className="text-xs font-semibold uppercase tracking-wide">Last night</span>
+          </div>
+          {onNavigateSleep && (
+            <button onClick={onNavigateSleep} className="text-xs font-medium text-teal-600 dark:text-teal-400 hover:underline underline-offset-2 cursor-pointer flex-shrink-0">
+              View details →
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
+          <span className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
+            {formatSleepDuration(entry.durationMinutes)}
+          </span>
+          <div className="flex flex-col gap-0.5">
+            {entry.quality != null && (
+              <span className="text-xs text-gray-500 dark:text-zinc-400">
+                {SLEEP_MOON[entry.quality - 1]} {SLEEP_QUALITY_LABEL[entry.quality - 1]}
+              </span>
+            )}
+            {entry.energy != null && (
+              <span className="text-xs text-gray-500 dark:text-zinc-400">
+                ⚡ {entry.energy} {SLEEP_ENERGY_LABEL[entry.energy - 1]}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className={`text-xs font-medium ${debtCls}`}>
+            {debtMin === 0 ? 'No sleep debt ✓' : `Sleep debt: ${formatSleepDuration(debtMin)}`}
+          </span>
+          <SleepSparkline entries={allEntries} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3 px-4 py-3.5 rounded border border-indigo-100 bg-indigo-50/40 dark:border-indigo-900/30 dark:bg-indigo-900/10">
+      <div className="flex items-center gap-2">
+        <MoonIcon />
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Log last night's sleep</span>
+        {duration != null && (
+          <span className="ml-auto text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+            {formatSleepDuration(duration)}
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <label className="block text-xs text-gray-400 dark:text-zinc-500 mb-1">Bedtime</label>
+          <input
+            type="time"
+            value={bedtime}
+            onChange={e => setBedtime(e.target.value)}
+            className="w-full px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="block text-xs text-gray-400 dark:text-zinc-500 mb-1">Wake time</label>
+          <input
+            type="time"
+            value={wakeTime}
+            onChange={e => setWakeTime(e.target.value)}
+            className="w-full px-2 py-1.5 rounded border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400 dark:text-zinc-500 w-14 flex-shrink-0">Quality</span>
+        <div className="flex gap-1">
+          {SLEEP_MOON.map((emoji, i) => {
+            const val = i + 1;
+            return (
+              <button
+                key={val}
+                onClick={() => setQuality(quality === val ? null : val)}
+                title={SLEEP_QUALITY_LABEL[i]}
+                className={`text-base leading-none px-1 py-0.5 rounded transition-all cursor-pointer ${
+                  quality === val ? 'bg-indigo-100 dark:bg-indigo-500/20 ring-1 ring-indigo-400 scale-110' : 'hover:bg-gray-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                {emoji}
+              </button>
+            );
+          })}
+        </div>
+        {quality != null && <span className="text-xs text-gray-400 dark:text-zinc-500 ml-1">{SLEEP_QUALITY_LABEL[quality - 1]}</span>}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400 dark:text-zinc-500 w-14 flex-shrink-0">Energy</span>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map(val => (
+            <button
+              key={val}
+              onClick={() => setEnergy(energy === val ? null : val)}
+              className={`w-7 h-7 rounded text-xs font-semibold transition-all cursor-pointer ${
+                energy === val
+                  ? 'bg-indigo-500 text-white scale-110'
+                  : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {val}
+            </button>
+          ))}
+        </div>
+        {energy != null && <span className="text-xs text-gray-400 dark:text-zinc-500 ml-1">{SLEEP_ENERGY_LABEL[energy - 1]}</span>}
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={!canSave || saving}
+        className={`w-full py-2 rounded text-sm font-medium transition-all ${
+          canSave && !saving
+            ? 'bg-indigo-500 hover:bg-indigo-600 text-white cursor-pointer'
+            : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 cursor-not-allowed'
+        }`}
+      >
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+    </div>
+  );
+}
+
+export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery, onNavigateSleep }) {
   const { tasks, loading, updateTask, toggleSubtask } = useTasksContext();
   const { sections } = useSections();
   const { totalByTaskId, todayByTaskId } = usePomodoroSessions();
@@ -194,12 +423,23 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery }) {
   const [groceryItems, setGroceryItems] = useState(null); // null = loading
   const [groceryQuickAdd, setGroceryQuickAdd] = useState('');
   const [groceryAdding, setGroceryAdding] = useState(false);
+  const [sleepEntry, setSleepEntry] = useState(undefined); // undefined=loading, null=no entry
+  const [sleepStats, setSleepStats] = useState(null);
+  const [sleepAllEntries, setSleepAllEntries] = useState([]);
 
   useEffect(() => {
     Promise.all([api.gratitude.today(), api.gratitudeSettings.get()])
       .then(([entry, s]) => { setGratitudeEntry(entry); setGratitudeSettings(s); })
       .catch(() => { setGratitudeEntry(null); setGratitudeSettings(null); });
     api.grocery.list().then(setGroceryItems).catch(() => setGroceryItems([]));
+    const yStr = yesterdayStr();
+    Promise.all([api.sleep.getByDate(yStr), api.sleep.stats(), api.sleep.list()])
+      .then(([entry, stats, entries]) => {
+        setSleepEntry(entry);
+        setSleepStats(stats);
+        setSleepAllEntries(entries.slice(0, 7));
+      })
+      .catch(() => { setSleepEntry(null); setSleepStats(null); setSleepAllEntries([]); });
   }, []);
 
   const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -442,6 +682,23 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery }) {
             </section>
           )}
         </>
+      )}
+
+      {/* Sleep card */}
+      {sleepEntry !== undefined && (
+        <section>
+          <TodaySleepCard
+            entry={sleepEntry}
+            stats={sleepStats}
+            allEntries={sleepAllEntries}
+            onSaved={saved => {
+              setSleepEntry(saved);
+              api.sleep.stats().then(setSleepStats).catch(() => {});
+              api.sleep.list().then(entries => setSleepAllEntries(entries.slice(0, 7))).catch(() => {});
+            }}
+            onNavigateSleep={onNavigateSleep}
+          />
+        </section>
       )}
 
       {/* Grocery card */}

@@ -1,4 +1,4 @@
-import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple } from '../types';
+import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, SleepEntry, SleepSettings, SleepStats, Book, BookWithCounts, BookNote, BookQuote, BookQuoteWithBook, BookLearning, BibliothecaSettings, BookStats, OpenLibraryResult, BookStatus } from '../types';
 
 interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
 interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
@@ -100,9 +100,77 @@ export const api = {
     delete: (id: number) => request<void>(`/api/grocery/staples/${id}`, { method: 'DELETE' }),
     addToList: () => request<{ added: number; skipped: number }>('/api/grocery/staples/add-to-list', { method: 'POST' }),
   },
+  sleep: {
+    list: () => request<SleepEntry[]>('/api/sleep'),
+    stats: () => request<SleepStats>('/api/sleep/stats'),
+    getByDate: (date: string) => request<SleepEntry | null>(`/api/sleep/${date}`),
+    save: (data: { date: string; bedtime: string; wakeTime: string; quality: number; energy: number; note?: string | null }) =>
+      request<SleepEntry>('/api/sleep', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (date: string) => request<void>(`/api/sleep/${date}`, { method: 'DELETE' }),
+    generateInsight: () => request<{ text: string; generatedAt: string }>('/api/sleep/insight', { method: 'POST' }),
+  },
+  sleepSettings: {
+    get: () => request<SleepSettings>('/api/sleep-settings'),
+    update: (data: Partial<SleepSettings>) =>
+      request<SleepSettings>('/api/sleep-settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
   ai: {
     summarize: (noteId: number) => request<SummaryResult>('/api/ai/summarize', { method: 'POST', body: JSON.stringify({ noteId }) }),
     extractTasks: (noteId: number) => request<{ tasks: ExtractedTask[] }>('/api/ai/extract-tasks', { method: 'POST', body: JSON.stringify({ noteId }) }),
     confirmTasks: (noteId: number, tasks: ExtractedTask[]) => request<{ inserted: number }>('/api/ai/confirm-tasks', { method: 'POST', body: JSON.stringify({ noteId, tasks }) }),
+    explainTerm: (term: string) => request<{ explanation: string }>('/api/ai/explain-term', { method: 'POST', body: JSON.stringify({ term }) }),
+    quizInsight: (data: { score: number; total: number; missedTerms: Array<{ term: string; definition: string }> }) =>
+      request<{ insight: string }>('/api/ai/quiz-insight', { method: 'POST', body: JSON.stringify(data) }),
+  },
+  books: {
+    list: (params?: { status?: BookStatus; search?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set('status', params.status);
+      if (params?.search) q.set('search', params.search);
+      const qs = q.toString();
+      return request<BookWithCounts[]>(`/api/books${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: number) => request<BookWithCounts>(`/api/books/${id}`),
+    stats: () => request<BookStats>('/api/books/stats'),
+    searchOpenLibrary: (query: string) => request<OpenLibraryResult[]>('/api/books/search-open-library', { method: 'POST', body: JSON.stringify({ query }) }),
+    create: (data: Omit<Book, 'id' | 'createdAt' | 'wantToReadOrder'>) =>
+      request<Book>('/api/books', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<Omit<Book, 'id' | 'createdAt'>>) =>
+      request<Book>(`/api/books/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/api/books/${id}`, { method: 'DELETE' }),
+  },
+  bookNotes: {
+    list: (bookId: number) => request<BookNote[]>(`/api/book-notes?bookId=${bookId}`),
+    create: (data: { bookId: number; content: string; pageNumber?: number | null }) =>
+      request<BookNote>('/api/book-notes', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { content?: string; pageNumber?: number | null }) =>
+      request<BookNote>(`/api/book-notes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/api/book-notes/${id}`, { method: 'DELETE' }),
+  },
+  bookQuotes: {
+    list: (bookId: number) => request<BookQuote[]>(`/api/book-quotes?bookId=${bookId}`),
+    random: () => request<BookQuoteWithBook | null>('/api/book-quotes/random'),
+    create: (data: { bookId: number; text: string; pageNumber?: number | null }) =>
+      request<BookQuote>('/api/book-quotes', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/api/book-quotes/${id}`, { method: 'DELETE' }),
+  },
+  bookLearnings: {
+    list: (params?: { bookId?: number; search?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.bookId != null) q.set('bookId', String(params.bookId));
+      if (params?.search) q.set('search', params.search);
+      const qs = q.toString();
+      return request<BookLearning[]>(`/api/book-learnings${qs ? `?${qs}` : ''}`);
+    },
+    create: (data: { bookId: number; term: string; definition: string; pageNumber?: number | null }) =>
+      request<BookLearning>('/api/book-learnings', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { term?: string; definition?: string; pageNumber?: number | null }) =>
+      request<BookLearning>(`/api/book-learnings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/api/book-learnings/${id}`, { method: 'DELETE' }),
+  },
+  bibliothecaSettings: {
+    get: () => request<BibliothecaSettings>('/api/bibliotheca-settings'),
+    update: (data: Partial<BibliothecaSettings>) =>
+      request<BibliothecaSettings>('/api/bibliotheca-settings', { method: 'PATCH', body: JSON.stringify(data) }),
   },
 };
