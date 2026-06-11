@@ -5,8 +5,12 @@ interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: stri
 
 const APP_TOKEN = import.meta.env.VITE_APP_TOKEN as string | undefined;
 
+// In production, the API lives on a different domain (e.g. Railway).
+// Locally this stays empty and the Vite dev proxy forwards /api to :3001.
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

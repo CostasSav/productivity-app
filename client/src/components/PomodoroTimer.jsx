@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDarkMode } from '../context/DarkModeContext';
+import { api } from '../api';
 
 const PHASES = {
   work:        { label: 'Focus',       duration: 25 * 60, color: '#6366f1', track: '#e0e7ff' },
@@ -65,16 +66,12 @@ function playBell() {
 
 async function logWorkSession({ taskId, taskTitle, startedAt }) {
   try {
-    await fetch('/api/pomodoro-sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        taskId: taskId ?? null,
-        taskTitle: taskTitle || 'Untitled',
-        startedAt,
-        completedAt: new Date().toISOString(),
-        type: 'work',
-      }),
+    await api.pomodoroSessions.create({
+      taskId: taskId ?? null,
+      taskTitle: taskTitle || 'Untitled',
+      startedAt,
+      completedAt: new Date().toISOString(),
+      type: 'work',
     });
   } catch {
     // silently fail — a logging error must never disrupt the timer
