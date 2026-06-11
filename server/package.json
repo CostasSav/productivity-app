@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "upload-db": "tsx src/upload-db.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
