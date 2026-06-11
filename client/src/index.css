@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Remove 300ms tap delay on mobile */
+button, a, [role="button"], input, select, textarea, label {
+  touch-action: manipulation;
+}
+
+/* Prevent accidental pull-to-refresh on scroll containers */
+.overflow-y-auto, .overflow-y-scroll {
+  overscroll-behavior-y: contain;
+}
+
 @layer utilities {
   .line-clamp-2 {
     display: -webkit-box;
@@ -46,6 +56,15 @@
 
 :root:not(.dark) *::-webkit-scrollbar-thumb:hover {
   background-color: #a1a1aa; /* zinc-400 */
+}
+
+/* ── Prevent iOS font-size auto-zoom (inputs need ≥ 16px) ───────────────────── */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 /* ── Reduced-motion: disable all custom animations ──────────────────────────── */

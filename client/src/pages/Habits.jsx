@@ -370,7 +370,7 @@ function HabitCard({
       {/* Header */}
       <div className="flex items-start gap-3">
         {/* drag handle */}
-        <div className="flex-shrink-0 mt-1 cursor-grab text-gray-300 dark:text-gray-600 hover:text-gray-400 dark:hover:text-gray-500"
+        <div className="hidden sm:block flex-shrink-0 mt-1 cursor-grab text-gray-300 dark:text-gray-600 hover:text-gray-400 dark:hover:text-gray-500"
           title="Drag to reorder" onMouseDown={e => e.stopPropagation()}>
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M7 2a1 1 0 00-1 1v1a1 1 0 002 0V3a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1a1 1 0 002 0V3a1 1 0 00-1-1zM7 8a1 1 0 00-1 1v1a1 1 0 002 0V9a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1a1 1 0 002 0V9a1 1 0 00-1-1zm-6 6a1 1 0 00-1 1v1a1 1 0 002 0v-1a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1a1 1 0 002 0v-1a1 1 0 00-1-1z" />
@@ -400,7 +400,7 @@ function HabitCard({
         <button
           onClick={e => { e.stopPropagation(); onEdit(habit); }}
           title="Edit habit"
-          className="flex-shrink-0 p-1 rounded text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 transition-colors"
+          className="flex-shrink-0 p-2.5 rounded text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 transition-colors active:scale-95"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />

@@ -149,7 +149,7 @@ function TodayTaskCard({ task, sections, onUpdate, onFocusTask, onToggleSubtask,
       {!isDone && onFocusTask && (
         <button
           onClick={() => onFocusTask(task)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs rounded-full hover:bg-teal-700 font-medium flex-shrink-0 transition-colors shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] bg-teal-600 text-white text-xs rounded-full hover:bg-teal-700 font-medium flex-shrink-0 transition-colors shadow-sm"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -622,7 +622,7 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery, onN
         </div>
         <div className="relative z-10 flex items-start justify-between gap-4 px-6 py-8">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-gray-900 dark:text-white">{formatHeadingDate()}</h1>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-gray-900 dark:text-white">{formatHeadingDate()}</h1>
             {countParts.length > 0 && (
               <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{countParts.join(' · ')}</p>
             )}

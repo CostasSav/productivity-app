@@ -79,7 +79,7 @@ export function PomodoroPanel({ task, isTimerRunning, onRunningChange, onClose }
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50" style={{ filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.18))' }}>
+    <div className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-auto sm:right-6 z-50" style={{ filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.18))' }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-gray-900 rounded-t-2xl">
         <div className="flex items-center gap-2">
@@ -134,7 +134,7 @@ export function PomodoroPanel({ task, isTimerRunning, onRunningChange, onClose }
       </div>
 
       {/* Timer */}
-      <div className="rounded-b-2xl overflow-hidden">
+      <div className="overflow-hidden sm:rounded-b-2xl">
         <PomodoroTimer
           key={task.id}
           taskId={task.id}

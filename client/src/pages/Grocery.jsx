@@ -419,23 +419,26 @@ function GroceryItemRow({
         ${isDragOver ? 'border-t-2 border-teal-400 dark:border-teal-500' : ''}
         ${isDragging ? 'opacity-30' : done ? 'opacity-40' : ''}`}
     >
-      {/* Drag handle */}
-      <div className="flex-shrink-0 cursor-grab text-gray-200 dark:text-zinc-700 opacity-0 group-hover:opacity-100 transition-opacity" title="Drag to reorder">
+      {/* Drag handle — hidden on touch (HTML5 drag doesn't work on mobile) */}
+      <div className="hidden sm:flex flex-shrink-0 cursor-grab text-gray-200 dark:text-zinc-700 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" title="Drag to reorder">
         <IconGrip />
       </div>
 
-      {/* Checkbox */}
+      {/* Checkbox — wider button wrapper ensures ≥44px tap width */}
       <button
         onClick={() => onToggle(item.id, !done)}
-        className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors cursor-pointer ${
-          done ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 dark:border-zinc-600 hover:border-teal-400'
-        }`}
+        aria-label={done ? 'Mark as not done' : 'Mark as done'}
+        className="flex-shrink-0 w-11 flex items-center justify-center cursor-pointer -ml-1"
       >
-        {done && (
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        )}
+        <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+          done ? 'bg-teal-500 border-teal-500 text-white' : 'border-gray-300 dark:border-zinc-600 hover:border-teal-400'
+        }`}>
+          {done && (
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </span>
       </button>
 
       {/* Name — clickable to edit */}
@@ -460,7 +463,7 @@ function GroceryItemRow({
       <button
         onClick={() => onStapleToggle(item)}
         title={isStaple ? 'Remove from staples' : 'Save as staple'}
-        className={`flex-shrink-0 transition-colors cursor-pointer opacity-0 group-hover:opacity-100 ${
+        className={`flex-shrink-0 p-2.5 transition-colors cursor-pointer opacity-60 sm:opacity-0 sm:group-hover:opacity-100 active:scale-95 ${
           isStaple ? 'text-amber-400 hover:text-amber-500' : 'text-gray-300 dark:text-zinc-600 hover:text-amber-400'
         }`}
       >
@@ -469,7 +472,8 @@ function GroceryItemRow({
 
       <button
         onClick={() => onDelete(item.id)}
-        className="flex-shrink-0 text-gray-200 dark:text-zinc-700 hover:text-red-400 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+        aria-label="Delete item"
+        className="flex-shrink-0 p-2.5 text-gray-400 dark:text-zinc-500 hover:text-red-400 transition-colors cursor-pointer opacity-60 sm:opacity-0 sm:group-hover:opacity-100 active:scale-95"
       >
         <IconTrash />
       </button>
@@ -489,7 +493,8 @@ function StapleRow({ staple, onDelete }) {
       )}
       <button
         onClick={() => onDelete(staple.id)}
-        className="flex-shrink-0 text-gray-200 dark:text-zinc-700 hover:text-red-400 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+        aria-label="Delete staple"
+        className="flex-shrink-0 p-2.5 text-gray-400 dark:text-zinc-500 hover:text-red-400 transition-colors cursor-pointer opacity-60 sm:opacity-0 sm:group-hover:opacity-100 active:scale-95"
       >
         <IconTrash />
       </button>

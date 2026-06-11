@@ -90,8 +90,8 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50">
+          <button onClick={onClose} className="px-4 py-3 min-h-[44px] rounded text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
+          <button onClick={handleSubmit} disabled={saving} className="px-4 py-3 min-h-[44px] bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50 cursor-pointer active:opacity-90">
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Task'}
           </button>
         </>
@@ -147,7 +147,7 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
           <div className="flex gap-2">
             {(['', 'daily', 'weekly', 'monthly'] as const).map(t => (
               <button key={t} type="button" onClick={() => handleRecurrenceTypeChange(t as RecurrenceType | '')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors
+                className={`px-3 py-2.5 min-h-[44px] rounded-md text-xs font-medium capitalize transition-colors active:scale-95
                   ${recurrence === t ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
                 {t === '' ? 'None' : t}
               </button>
@@ -159,7 +159,7 @@ export function TaskForm({ initial, sections, onSave, onClose, onCreateSection }
               <div className="flex gap-1.5">
                 {DAYS.map((day, i) => (
                   <button key={day} type="button" onClick={() => handleDayClick(i)}
-                    className={`w-9 h-9 rounded-full text-xs font-medium transition-colors
+                    className={`w-11 h-11 rounded-full text-xs font-medium transition-colors active:scale-95
                       ${recurrenceDay === i ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
                     {day}
                   </button>

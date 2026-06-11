@@ -69,6 +69,7 @@ export default function App() {
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [view, setView] = useState<View>(() => readSessionView());
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleDismissWelcome = () => {
     localStorage.setItem(WELCOME_KEY, '1');
@@ -233,7 +234,7 @@ export default function App() {
 
   const navBtn = (v: View, label: string, icon: React.ReactNode) => (
     <button
-      onClick={() => setView(v)}
+      onClick={() => { setView(v); setMobileMenuOpen(false); }}
       title={collapsed ? label : undefined}
       className={`flex items-center w-full rounded text-sm font-medium transition-colors
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1
@@ -248,9 +249,55 @@ export default function App() {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-[#111113] font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-gray-50 dark:bg-[#111113] font-sans">
+
+      {/* Mobile top bar — hidden on md+ */}
+      <div className="md:hidden flex-shrink-0 h-14 flex items-center justify-between px-4 bg-white dark:bg-[#09090b] border-b border-gray-200 dark:border-white/[0.06] z-10">
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          aria-label="Open menu"
+          className="p-2 -ml-1 rounded text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-teal-600 rounded flex items-center justify-center flex-shrink-0 shadow-sm">
+            <Icon d="M13 10V3L4 14h7v7l9-11h-7z" className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="text-sm font-bold text-gray-900 dark:text-white">My Workspace</span>
+        </div>
+        <button
+          onClick={toggle}
+          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+          className="p-2 -mr-1 rounded text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
+        >
+          {dark
+            ? <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+            : <Icon d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          }
+        </button>
+      </div>
+
+      {/* Mobile backdrop */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className={`${collapsed ? 'w-14' : 'w-52'} flex-shrink-0 border-r border-gray-200 dark:border-white/[0.06] bg-white dark:bg-[#09090b] flex flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden transition-all duration-300`}>
+      <aside className={`
+        flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden
+        border-r border-gray-200 dark:border-white/[0.06] bg-white dark:bg-[#09090b]
+        transition-all duration-300
+        ${mobileMenuOpen
+          ? 'flex fixed inset-y-0 left-0 z-50 w-64 shadow-2xl'
+          : 'hidden md:flex md:relative md:inset-auto md:shadow-none md:flex-shrink-0'}
+        ${collapsed ? 'md:w-14' : 'md:w-52'}
+      `}>
 
         {/* Brand mark */}
         <div className={`flex items-center gap-2.5 mb-4 ${collapsed ? 'justify-center px-1' : 'px-2'}`}>
@@ -319,7 +366,7 @@ export default function App() {
             {(sectionsExpanded ? sections : sections.slice(0, 4)).map(s => (
               <button
                 key={s.id}
-                onClick={() => setView({ type: 'section', id: s.id })}
+                onClick={() => { setView({ type: 'section', id: s.id }); setMobileMenuOpen(false); }}
                 className={`flex items-center gap-2 w-full px-3 py-2 rounded text-sm font-medium transition-colors
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1
                   ${isActive({ type: 'section', id: s.id })
@@ -350,6 +397,7 @@ export default function App() {
                 if (!name?.trim()) return;
                 const s = await createSection(name.trim(), '#6366f1');
                 setView({ type: 'section', id: s.id });
+                setMobileMenuOpen(false);
               }}
               className="flex items-center gap-2 w-full px-3 py-2 rounded text-sm text-gray-400 hover:text-teal-600 hover:bg-gray-100 dark:text-zinc-500 dark:hover:text-teal-400 dark:hover:bg-white/[0.06] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1"
             >
@@ -480,12 +528,25 @@ export default function App() {
         )}
         {view === 'notes' && (
           <div className="flex-1 flex overflow-hidden animate-fade-in">
-            <NoteList
-              notes={notes} sections={sections} loading={notesLoading}
-              selectedId={selectedNoteId} onSelect={id => setSelectedNoteId(id)}
-              onNew={() => handleNewNote()} onDelete={handleDeleteNote}
-            />
-            <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-[#111113]">
+            <div className={selectedNoteId ? 'hidden md:flex md:flex-col md:h-full md:flex-shrink-0' : 'flex flex-col h-full w-full'}>
+              <NoteList
+                notes={notes} sections={sections} loading={notesLoading}
+                selectedId={selectedNoteId} onSelect={id => setSelectedNoteId(id)}
+                onNew={() => handleNewNote()} onDelete={handleDeleteNote}
+              />
+            </div>
+            <div className={`${!selectedNoteId ? 'hidden md:flex' : 'flex'} flex-1 overflow-hidden flex-col bg-white dark:bg-[#111113]`}>
+              {selectedNoteId && (
+                <button
+                  onClick={() => setSelectedNoteId(null)}
+                  className="md:hidden flex items-center gap-1.5 px-4 py-3 border-b border-gray-200 dark:border-zinc-800/60 text-sm font-medium text-teal-600 dark:text-teal-400 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors flex-shrink-0 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  All notes
+                </button>
+              )}
               {activeNote ? (
                 <NoteEditor
                   key={activeNote.id} note={activeNote} sections={sections}

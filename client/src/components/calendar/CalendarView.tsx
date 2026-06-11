@@ -310,7 +310,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
           </div>
           <button
             onClick={() => setShowBacklog(b => !b)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition-colors cursor-pointer ${
+            className={`hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition-colors cursor-pointer ${
               showBacklog
                 ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-800 dark:border-gray-200'
                 : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -350,8 +350,9 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
       <div className="flex-1 flex gap-3 min-h-0">
       <div className="flex-1 flex flex-col min-h-0">
 
-      {/* Calendar grid */}
-      <div className="flex-1 flex flex-col">
+      {/* Calendar grid — horizontally scrollable on narrow viewports */}
+      <div className="flex-1 overflow-x-auto min-h-0">
+      <div className="flex flex-col min-w-[420px] h-full">
         <div className="grid grid-cols-7 mb-1">
           {WEEKDAYS.map(d => (
             <div key={d} className="text-xs font-semibold text-gray-400 dark:text-gray-500 text-center py-2">{d}</div>
@@ -425,7 +426,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
                     {isExpanded && (
                       <div
                         className={`absolute top-0 bg-white dark:bg-[#111113] border border-teal-400 rounded-lg shadow-xl z-20 flex flex-col ${di >= 4 ? 'right-0' : 'left-0'}`}
-                        style={{ minWidth: '220px', maxHeight: '280px' }}
+                        style={{ minWidth: 'min(220px, calc(100vw - 32px))', maxHeight: '280px' }}
                         onClick={e => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-200 dark:border-zinc-800/60 flex-shrink-0">
@@ -456,7 +457,8 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
             </div>
           ))}
         </div>
-      </div>
+      </div>{/* end min-w inner wrapper */}
+      </div>{/* end overflow-x-auto scroll wrapper */}
 
       {/* Legend */}
       <div className="flex items-center gap-4 pt-3 border-t border-gray-200 dark:border-zinc-800/60 mt-2 flex-wrap">
@@ -475,9 +477,9 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
 
       </div>{/* end calendar column */}
 
-      {/* Backlog panel */}
+      {/* Backlog panel — desktop only; too narrow on mobile */}
       {showBacklog && (
-        <div className="w-60 flex-shrink-0 flex flex-col border border-gray-200 dark:border-zinc-700/60 rounded-lg bg-white dark:bg-[#09090b] overflow-hidden">
+        <div className="hidden sm:flex w-60 flex-shrink-0 flex-col border border-gray-200 dark:border-zinc-700/60 rounded-lg bg-white dark:bg-[#09090b] overflow-hidden">
           {/* Panel header */}
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 dark:border-zinc-700/60 flex-shrink-0">
             <div className="flex items-center gap-2">

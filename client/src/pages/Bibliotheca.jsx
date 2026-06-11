@@ -206,7 +206,7 @@ function BookCard({ book, position, isDragging, isDragOver, onDragStart, onDragO
         <div className="absolute top-2 right-2 z-10 bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">#{position + 1}</div>
       )}
       {draggable && (
-        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-70 transition-opacity text-white drop-shadow">
+        <div className="absolute top-2 right-2 z-10 hidden sm:block sm:opacity-0 sm:group-hover:opacity-70 transition-opacity text-white drop-shadow">
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
             <path d="M7 2a1 1 0 00-1 1v1a1 1 0 002 0V3a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1a1 1 0 002 0V3a1 1 0 00-1-1zM7 8a1 1 0 00-1 1v1a1 1 0 002 0V9a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1a1 1 0 002 0V9a1 1 0 00-1-1zm-6 6a1 1 0 00-1 1v1a1 1 0 002 0v-1a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1a1 1 0 002 0v-1a1 1 0 00-1-1z" />
           </svg>

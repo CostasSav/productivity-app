@@ -23,7 +23,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
       aria-modal="true"
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded shadow-xl w-full max-w-lg mx-4 flex flex-col max-h-[90vh]"
+        className="bg-white dark:bg-gray-800 rounded shadow-xl w-full max-w-lg mx-3 sm:mx-4 flex flex-col max-h-[90vh]"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">

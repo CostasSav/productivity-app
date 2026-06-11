@@ -36,7 +36,7 @@ export function NoteList({ notes, sections, loading, selectedId, filterSectionId
   })();
 
   return (
-    <div className="w-72 flex-shrink-0 border-r border-gray-200 dark:border-zinc-800/60 flex flex-col h-full bg-white dark:bg-[#09090b]">
+    <div className="w-full md:w-72 md:flex-shrink-0 border-r border-gray-200 dark:border-zinc-800/60 flex flex-col h-full bg-white dark:bg-[#09090b]">
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-zinc-800/60">
         <h2 className="font-semibold text-gray-800 dark:text-gray-100">Notes</h2>
         {/* CTA â€” matches Habits/Tasks button style */}

@@ -47,10 +47,10 @@ export function NoteItem({ note, section, selected, onClick, onDelete }: NoteIte
       </div>
       <button
         onClick={e => { e.stopPropagation(); onDelete(note.id); }}
-        className="ml-2 p-1 text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-        title="Delete note"
+        aria-label="Delete note"
+        className="ml-1 flex items-center justify-center w-10 h-10 rounded-lg text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-all flex-shrink-0 active:scale-95 cursor-pointer"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
       </button>
     </div>
   );

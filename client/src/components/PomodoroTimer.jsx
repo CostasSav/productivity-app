@@ -263,7 +263,7 @@ export function PomodoroTimer({ taskTitle, taskId, onRunningChange, compact = fa
   }
 
   return (
-    <div className="flex flex-col items-center gap-5 p-7 rounded-2xl shadow-lg w-80 mx-auto select-none"
+    <div className="flex flex-col items-center gap-5 p-7 rounded-2xl shadow-lg w-full sm:w-80 sm:mx-auto select-none"
       style={{ background: bgStyle }}>
 
       {/* Phase tabs */}

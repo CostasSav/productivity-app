@@ -12,7 +12,7 @@ const PRIORITY_BORDER: Record<Priority, string> = {
 const PRIORITY_CYCLE: Record<Priority, Priority> = { high: 'medium', medium: 'low', low: 'high' };
 
 // Shared class for icon-only action buttons â€” meets minimum touch target via padding
-const iconBtn = 'p-2 rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1';
+const iconBtn = 'p-2.5 rounded transition-colors cursor-pointer active:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1';
 
 function isOverdue(task: Task): boolean {
   if (!task.deadline || task.status === 'done') return false;
@@ -89,7 +89,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
         <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${overdue ? 'bg-red-500' : PRIORITY_BORDER[task.priority]}`} />
 
         {/* Checkbox â€” wrapped for a larger tap target */}
-        <label className="mt-0.5 flex-shrink-0 flex items-center justify-center w-6 h-6 cursor-pointer">
+        <label className="flex-shrink-0 flex items-center justify-center w-10 h-10 cursor-pointer -mt-1 -ml-1">
           <input
             type="checkbox"
             checked={task.status === 'done'}
@@ -140,18 +140,20 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
                 </div>
               )}
               {task.subtasks.map(sub => (
-                <div key={sub.id} className="flex items-center gap-2 group/sub">
-                  <input
-                    type="checkbox"
-                    checked={sub.status === 'done'}
-                    onChange={e => onToggleSubtask(task.id, sub.id, e.target.checked)}
-                    className="w-3.5 h-3.5 accent-teal-600 cursor-pointer flex-shrink-0"
-                  />
-                  <span className={`text-xs flex-1 ${sub.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>{sub.title}</span>
+                <div key={sub.id} className="flex items-center gap-1 group/sub">
+                  <label className="flex-shrink-0 flex items-center justify-center w-8 h-8 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sub.status === 'done'}
+                      onChange={e => onToggleSubtask(task.id, sub.id, e.target.checked)}
+                      className="w-3.5 h-3.5 accent-teal-600 cursor-pointer"
+                    />
+                  </label>
+                  <span className={`text-sm flex-1 ${sub.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'}`}>{sub.title}</span>
                   <button
                     onClick={() => onDeleteSubtask(task.id, sub.id)}
                     aria-label="Delete subtask"
-                    className="opacity-0 group-hover/sub:opacity-100 p-1.5 text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 focus-visible:opacity-100 rounded"
+                    className="opacity-60 sm:opacity-0 sm:group-hover/sub:opacity-100 p-2 text-gray-300 hover:text-red-500 dark:text-gray-600 dark:hover:text-red-400 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-1 focus-visible:opacity-100 rounded active:scale-95"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
@@ -166,7 +168,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
                     onChange={e => setNewSubtaskTitle(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleAddSubtask(); if (e.key === 'Escape') { setAddingSubtask(false); setNewSubtaskTitle(''); } }}
                     placeholder="Subtask title..."
-                    className="flex-1 text-xs border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500"
+                    className="flex-1 text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500"
                   />
                   <button onClick={handleAddSubtask} className="text-xs px-2 py-1.5 bg-teal-600 text-white rounded hover:bg-teal-700 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">Add</button>
                   <button onClick={() => { setAddingSubtask(false); setNewSubtaskTitle(''); }} className="text-xs px-2 py-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded">âœ•</button>
@@ -183,7 +185,7 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-0.5 flex-shrink-0">
+        <div className="flex gap-1 flex-shrink-0">
           <button
             onClick={() => onUpdate(task.id, { pinnedToday: !task.pinnedToday })}
             title={task.pinnedToday ? 'Unpin from Today' : 'Pin to Today'}
