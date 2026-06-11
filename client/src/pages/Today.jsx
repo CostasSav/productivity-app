@@ -442,8 +442,6 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery, onN
       .catch(() => { setSleepEntry(null); setSleepStats(null); setSleepAllEntries([]); });
   }, []);
 
-  const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
   useEffect(() => {
     const handler = () => {
       setShowToast(true);
@@ -502,14 +500,25 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery, onN
 
   const activeHabitsToday = habitsToday.filter(h => !todayLogByHabitId.has(h.id));
 
+  const suggestBucket = (t) => {
+    if (t.deadline < todayStr) return 0;   // overdue
+    if (t.deadline === todayStr) return 1; // today
+    return 2;                               // future
+  };
+
   const suggested = tasks
-    .filter(t => (t.status !== 'done' || fadingIds.has(t.id)) && !t.pinnedToday && t.deadline && t.deadline <= in3Days)
+    .filter(t => (t.status !== 'done' || fadingIds.has(t.id)) && !t.pinnedToday && t.deadline)
     .sort((a, b) => {
-      const aOver = isOverdue(a) ? 0 : 1;
-      const bOver = isOverdue(b) ? 0 : 1;
-      if (aOver !== bOver) return aOver - bOver;
+      const ba = suggestBucket(a), bb = suggestBucket(b);
+      if (ba !== bb) return ba - bb;
       const pa = PRIORITY_ORDER[a.priority] ?? 1;
       const pb = PRIORITY_ORDER[b.priority] ?? 1;
+      if (ba === 0) {
+        // overdue: oldest deadline first, then priority
+        if (a.deadline !== b.deadline) return a.deadline < b.deadline ? -1 : 1;
+        return pa - pb;
+      }
+      // today + future: highest priority first, then soonest deadline
       if (pa !== pb) return pa - pb;
       return a.deadline < b.deadline ? -1 : 1;
     })

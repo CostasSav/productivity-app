@@ -631,10 +631,10 @@ function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 
               {/* Progress (reading only) */}
               {book.status === 'reading' && (
                 <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="text-gray-500 dark:text-zinc-400 flex items-center gap-1">
-                      Page{' '}
-                      {editingPage ? (
+                  <div className="flex items-center justify-between mb-1.5">
+                    {editingPage ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-gray-500 dark:text-zinc-400">Page</span>
                         <input
                           ref={pageInputRef}
                           type="number"
@@ -647,24 +647,39 @@ function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 
                             if (e.key === 'Enter') commitPage();
                             if (e.key === 'Escape') setEditingPage(false);
                           }}
-                          className="w-14 px-1 text-center border-b border-teal-500 bg-transparent text-gray-900 dark:text-white focus:outline-none"
+                          className="w-16 px-2 py-0.5 text-center text-sm font-semibold border border-teal-500 rounded-lg bg-transparent text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/40"
                           onClick={e => e.stopPropagation()}
                         />
-                      ) : (
+                        {book.totalPages > 0 && (
+                          <span className="text-gray-400 dark:text-zinc-500 text-sm">of {book.totalPages}</span>
+                        )}
                         <button
-                          onClick={startEditPage}
-                          title="Click to update current page"
-                          className="font-semibold text-gray-700 dark:text-zinc-200 hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer transition-colors underline decoration-dashed underline-offset-2 decoration-gray-300 dark:decoration-zinc-600"
+                          onClick={() => setEditingPage(false)}
+                          className="text-xs text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 cursor-pointer transition-colors"
                         >
-                          {savingPage ? '…' : currentPage}
+                          Cancel
                         </button>
-                      )}
-                      {book.totalPages > 0 && (
-                        <span className="text-gray-400 dark:text-zinc-500">of {book.totalPages}</span>
-                      )}
-                    </span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={startEditPage}
+                        title="Update pages read"
+                        className="group flex items-center gap-1.5 text-sm cursor-pointer"
+                      >
+                        <span className="text-gray-500 dark:text-zinc-400">Page</span>
+                        <span className="font-bold text-gray-800 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                          {savingPage ? '…' : currentPage}
+                        </span>
+                        {book.totalPages > 0 && (
+                          <span className="text-gray-400 dark:text-zinc-500">of {book.totalPages}</span>
+                        )}
+                        <svg className="w-3.5 h-3.5 text-gray-300 dark:text-zinc-600 group-hover:text-teal-500 dark:group-hover:text-teal-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                        </svg>
+                      </button>
+                    )}
                     {pct !== null && (
-                      <span className="font-semibold text-teal-600 dark:text-teal-400">{pct}%</span>
+                      <span className="text-xs font-semibold text-teal-600 dark:text-teal-400">{pct}%</span>
                     )}
                   </div>
                   {pct !== null && (

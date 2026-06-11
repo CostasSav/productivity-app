@@ -23,8 +23,34 @@ import { api } from './api';
 import type { Note, Task } from './types';
 
 const WELCOME_KEY = 'workspace_welcome_seen';
+const SESSION_VIEW_KEY = 'app_view';
+const SESSION_NOTE_KEY = 'app_selected_note';
+const SESSION_FOCUS_KEY = 'app_focus_task';
 
 type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | 'gratitude' | 'grocery' | 'sleep' | 'bibliotheca' | 'settings' | { type: 'section'; id: number };
+
+const VALID_VIEWS = new Set(['today', 'tasks', 'calendar', 'notes', 'habits', 'gratitude', 'grocery', 'sleep', 'bibliotheca', 'settings']);
+
+function readSessionView(): View {
+  try {
+    const raw = sessionStorage.getItem(SESSION_VIEW_KEY);
+    if (!raw) return 'today';
+    const v = JSON.parse(raw);
+    if (typeof v === 'string' && VALID_VIEWS.has(v)) return v as View;
+    if (v && typeof v === 'object' && v.type === 'section' && typeof v.id === 'number') return v as View;
+  } catch {}
+  return 'today';
+}
+
+function readSessionFocusTask(): { id: number; title: string } | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_FOCUS_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (v && typeof v.id === 'number' && typeof v.title === 'string') return v;
+  } catch {}
+  return null;
+}
 
 // â"€â"€ Inline SVG icon helper â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
@@ -41,7 +67,7 @@ function Icon({ d, d2, className = 'w-4 h-4 flex-shrink-0' }: { d: string; d2?: 
 
 export default function App() {
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
-  const [view, setView] = useState<View>('today');
+  const [view, setView] = useState<View>(() => readSessionView());
   const [collapsed, setCollapsed] = useState(false);
 
   const handleDismissWelcome = () => {
@@ -51,9 +77,11 @@ export default function App() {
   const { notes, loading: notesLoading, createNote, updateNoteInList, deleteNote } = useNotes();
   const { tasks, createTask, updateTask } = useTasksContext();
   const { sections, createSection, updateSection, deleteSection } = useSections();
-  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
+  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(() => {
+    try { const v = sessionStorage.getItem(SESSION_NOTE_KEY); return v ? Number(v) : null; } catch { return null; }
+  });
   const [activeNote, setActiveNote] = useState<Note | null>(null);
-  const [focusTask, setFocusTask] = useState<{ id: number; title: string } | null>(null);
+  const [focusTask, setFocusTask] = useState<{ id: number; title: string } | null>(() => readSessionFocusTask());
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const { dark, toggle } = useDarkMode();
@@ -72,6 +100,23 @@ export default function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // Persist navigation state so it survives page reloads (PC sleep, browser restart)
+  useEffect(() => {
+    try { sessionStorage.setItem(SESSION_VIEW_KEY, JSON.stringify(view)); } catch {}
+  }, [view]);
+  useEffect(() => {
+    try {
+      if (selectedNoteId != null) sessionStorage.setItem(SESSION_NOTE_KEY, String(selectedNoteId));
+      else sessionStorage.removeItem(SESSION_NOTE_KEY);
+    } catch {}
+  }, [selectedNoteId]);
+  useEffect(() => {
+    try {
+      if (focusTask) sessionStorage.setItem(SESSION_FOCUS_KEY, JSON.stringify(focusTask));
+      else sessionStorage.removeItem(SESSION_FOCUS_KEY);
+    } catch {}
+  }, [focusTask]);
 
   useEffect(() => {
     if (!selectedNoteId && notes.length > 0) setSelectedNoteId(notes[0].id);

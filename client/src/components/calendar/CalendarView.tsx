@@ -62,6 +62,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
   const [edgeHint, setEdgeHint] = useState<'left' | 'right' | null>(null);
+  const [showBacklog, setShowBacklog] = useState(false);
 
   const edgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = draggingTaskId !== null;
@@ -93,6 +94,30 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
     const key = toLocalDateKey(task.deadline);
     if (!tasksByDate[key]) tasksByDate[key] = [];
     tasksByDate[key].push(task);
+  }
+
+  // Backlog: tasks without a deadline, respecting the active section filter
+  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  const backlogTasks = tasks.filter(t => {
+    if (t.deadline || t.status === 'done') return false;
+    if (activeSectionFilter != null && t.section_id !== activeSectionFilter) return false;
+    return true;
+  });
+
+  const backlogGroups: Array<{ key: string | number; name: string; color: string | null; tasks: Task[] }> = [];
+  const backlogBySection: Record<string | number, Task[]> = {};
+  for (const t of backlogTasks) {
+    const key = t.section_id ?? 'none';
+    if (!backlogBySection[key]) backlogBySection[key] = [];
+    backlogBySection[key].push(t);
+  }
+  for (const s of sections) {
+    if (backlogBySection[s.id]) {
+      backlogGroups.push({ key: s.id, name: s.name, color: s.color, tasks: [...backlogBySection[s.id]].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1)) });
+    }
+  }
+  if (backlogBySection['none']) {
+    backlogGroups.push({ key: 'none', name: 'Unassigned', color: null, tasks: [...backlogBySection['none']].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1)) });
   }
 
   const prevMonth = () => {
@@ -274,12 +299,32 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
             </div>
           )}
         </div>
-        <div className="flex gap-1">
-          <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-1">
+            <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+          <button
+            onClick={() => setShowBacklog(b => !b)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition-colors cursor-pointer ${
+              showBacklog
+                ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-800 dark:border-gray-200'
+                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            Backlog
+            {backlogTasks.length > 0 && (
+              <span className="ml-0.5 bg-teal-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                {backlogTasks.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -300,6 +345,10 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
           ))}
         </div>
       )}
+
+      {/* Calendar + Backlog row */}
+      <div className="flex-1 flex gap-3 min-h-0">
+      <div className="flex-1 flex flex-col min-h-0">
 
       {/* Calendar grid */}
       <div className="flex-1 flex flex-col">
@@ -423,6 +472,87 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
         </span>
         <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">Shift+click to select · drag to edge to change month</span>
       </div>
+
+      </div>{/* end calendar column */}
+
+      {/* Backlog panel */}
+      {showBacklog && (
+        <div className="w-60 flex-shrink-0 flex flex-col border border-gray-200 dark:border-zinc-700/60 rounded-lg bg-white dark:bg-[#09090b] overflow-hidden">
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 dark:border-zinc-700/60 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Backlog</span>
+              {backlogTasks.length > 0 && (
+                <span className="text-xs bg-teal-500/15 text-teal-600 dark:text-teal-400 rounded-full px-2 py-0.5 font-semibold">{backlogTasks.length}</span>
+              )}
+            </div>
+            <button onClick={() => setShowBacklog(false)} className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-400 cursor-pointer transition-colors">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+
+          {/* Panel body */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-4">
+            {backlogTasks.length === 0 ? (
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-8">No unscheduled tasks</p>
+            ) : (
+              backlogGroups.map(group => (
+                <div key={group.key}>
+                  <div className="flex items-center gap-1.5 mb-1 px-1">
+                    {group.color
+                      ? <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                      : <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-zinc-600 flex-shrink-0" />}
+                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest truncate">{group.name}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {group.tasks.map(task => (
+                      <div
+                        key={task.id}
+                        draggable
+                        onDragStart={e => {
+                          e.dataTransfer.setData('taskIds', JSON.stringify([task.id]));
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDraggingTaskId(task.id);
+                        }}
+                        onDragEnd={() => { setDraggingTaskId(null); setDragOverDate(null); }}
+                        className={`group/bl flex items-center gap-1.5 px-1.5 py-1.5 rounded transition-colors cursor-grab active:cursor-grabbing ${
+                          draggingTaskId === task.id ? 'opacity-40' : 'hover:bg-gray-50 dark:hover:bg-zinc-800'
+                        }`}
+                      >
+                        <button
+                          onClick={e => { e.stopPropagation(); onUpdateTask(task.id, { status: 'done' }); }}
+                          title="Mark as done"
+                          className="w-3.5 h-3.5 rounded-full flex-shrink-0 border flex items-center justify-center hover:scale-110 transition-transform cursor-pointer"
+                          style={{ borderColor: PRIORITY_HEX[task.priority] }}
+                        >
+                          <svg className="w-2 h-2 opacity-0 group-hover/bl:opacity-100 transition-opacity" style={{ color: PRIORITY_HEX[task.priority] }} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 12 12">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M1.5 6l3 3 5.5-5" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setEditingTask(task)}
+                          className="flex-1 text-left text-xs text-gray-700 dark:text-gray-200 truncate hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer"
+                        >
+                          {task.title}
+                        </button>
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${PRIORITY_COLORS[task.priority]}`} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {backlogTasks.length > 0 && (
+            <div className="border-t border-gray-200 dark:border-zinc-700/60 px-3 py-2 flex-shrink-0">
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Drag a task onto a date to schedule it</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      </div>{/* end calendar+backlog row */}
 
       {/* Transparent backdrop — closes expanded cell; passthrough during drag */}
       {expandedDate && (

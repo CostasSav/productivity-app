@@ -13,6 +13,35 @@ const CY = 100;
 const RADIUS = 86;
 const STROKE = 9;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const STORAGE_KEY = 'pomodoro_state';
+
+function loadSavedState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (typeof saved.savedAt !== 'number') return null;
+    const elapsed = Math.floor((Date.now() - saved.savedAt) / 1000);
+    let { phase = 'work', secondsLeft = PHASES.work.duration, running = false, pomodorosCompleted = 0 } = saved;
+    if (running && elapsed > 1) {
+      if (elapsed >= secondsLeft) {
+        // Phase completed while away — advance once and pause
+        if (phase === 'work') {
+          pomodorosCompleted = pomodorosCompleted + 1;
+          phase = pomodorosCompleted % POMODOROS_BEFORE_LONG === 0 ? 'long_break' : 'short_break';
+        } else {
+          if (phase === 'long_break') pomodorosCompleted = 0;
+          phase = 'work';
+        }
+        secondsLeft = PHASES[phase].duration;
+        running = false;
+      } else {
+        secondsLeft = secondsLeft - elapsed;
+      }
+    }
+    return { phase, secondsLeft, running, pomodorosCompleted };
+  } catch { return null; }
+}
 
 function playBell() {
   try {
@@ -52,18 +81,41 @@ async function logWorkSession({ taskId, taskTitle, startedAt }) {
   }
 }
 
-export function PomodoroTimer({ taskTitle, taskId, onRunningChange }) {
-  const [phase, setPhase] = useState('work');
-  const [secondsLeft, setSecondsLeft] = useState(PHASES.work.duration);
-  const [running, setRunning] = useState(false);
-  const [pomodorosCompleted, setPomodorosCompleted] = useState(0);
+export function PomodoroTimer({ taskTitle, taskId, onRunningChange, compact = false }) {
+  // Load saved state once on mount — stored in a ref so it's computed synchronously
+  const restoredRef = useRef(undefined);
+  if (restoredRef.current === undefined) {
+    const s = loadSavedState();
+    restoredRef.current = {
+      phase: s?.phase ?? 'work',
+      secondsLeft: s?.secondsLeft ?? PHASES.work.duration,
+      running: s?.running ?? false,
+      pomodorosCompleted: s?.pomodorosCompleted ?? 0,
+    };
+  }
+  const rs = restoredRef.current;
+
+  const [phase, setPhase] = useState(() => rs.phase);
+  const [secondsLeft, setSecondsLeft] = useState(() => rs.secondsLeft);
+  const [running, setRunning] = useState(() => rs.running);
+  const [pomodorosCompleted, setPomodorosCompleted] = useState(() => rs.pomodorosCompleted);
   const { dark } = useDarkMode();
 
   useEffect(() => { onRunningChange?.(running); }, [running, onRunningChange]);
 
-  const phaseRef = useRef('work');
-  const pomodorosRef = useRef(0);
+  const phaseRef = useRef(rs.phase);
+  const pomodorosRef = useRef(rs.pomodorosCompleted);
   const sessionStartRef = useRef(null);
+  const lastTickRef = useRef(Date.now());
+  const runningRef = useRef(rs.running);
+  useEffect(() => { runningRef.current = running; }, [running]);
+
+  // Persist timer state on every relevant change so page reloads restore correctly
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      phase, secondsLeft, running, pomodorosCompleted, savedAt: Date.now(),
+    }));
+  }, [phase, secondsLeft, running, pomodorosCompleted]);
 
   const advancePhase = useCallback(() => {
     playBell();
@@ -95,18 +147,45 @@ export function PomodoroTimer({ taskTitle, taskId, onRunningChange }) {
     }
   }, [taskId, taskTitle]);
 
+  // Keep a ref to advancePhase so visibilitychange handler always calls the latest version
+  const advancePhaseRef = useRef(advancePhase);
+  useEffect(() => { advancePhaseRef.current = advancePhase; }, [advancePhase]);
+
+  // Catch up on elapsed time when the tab regains focus after being backgrounded / PC sleep
+  useEffect(() => {
+    const handle = () => {
+      if (document.visibilityState !== 'visible' || !runningRef.current) return;
+      const elapsed = Math.floor((Date.now() - lastTickRef.current) / 1000);
+      if (elapsed <= 1) return;
+      lastTickRef.current = Date.now();
+      setSecondsLeft(prev => {
+        if (prev <= elapsed) {
+          advancePhaseRef.current();
+          return 0;
+        }
+        return prev - elapsed;
+      });
+    };
+    document.addEventListener('visibilitychange', handle);
+    return () => document.removeEventListener('visibilitychange', handle);
+  }, []);
+
   useEffect(() => {
     if (!running) return;
     if (!sessionStartRef.current) {
       sessionStartRef.current = new Date().toISOString();
     }
+    lastTickRef.current = Date.now();
     const id = setInterval(() => {
+      const now = Date.now();
+      const elapsed = Math.max(1, Math.floor((now - lastTickRef.current) / 1000));
+      lastTickRef.current = now;
       setSecondsLeft(prev => {
-        if (prev <= 1) {
+        if (prev <= elapsed) {
           advancePhase();
           return 0;
         }
-        return prev - 1;
+        return prev - elapsed;
       });
     }, 1000);
     return () => clearInterval(id);
@@ -146,6 +225,45 @@ export function PomodoroTimer({ taskTitle, taskId, onRunningChange }) {
   const bgStyle = dark
     ? `linear-gradient(135deg, ${track}40 0%, #1f2937 100%)`
     : `linear-gradient(135deg, ${track} 0%, #ffffff 100%)`;
+
+  if (compact) {
+    return (
+      <div className="flex items-center justify-center p-5 select-none" style={{ background: bgStyle }}>
+        <div className="relative" style={{ width: 160, height: 160 }}>
+          <svg width="160" height="160" viewBox="0 0 210 210" style={{ transform: 'rotate(-90deg)' }}>
+            <circle cx={CX} cy={CY} r={RADIUS}
+              fill="none" stroke={dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'} strokeWidth={STROKE} />
+            <circle cx={CX} cy={CY} r={RADIUS}
+              fill="none"
+              stroke={color}
+              strokeWidth={STROKE}
+              strokeLinecap="round"
+              strokeDasharray={CIRCUMFERENCE}
+              strokeDashoffset={dashOffset}
+              style={{
+                transition: running
+                  ? 'stroke-dashoffset 1s linear'
+                  : 'stroke-dashoffset 0.4s ease, stroke 0.5s',
+              }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+            <span className={`text-4xl font-bold font-mono tracking-tight leading-none ${dark ? 'text-gray-100' : 'text-gray-800'}`}>
+              {mm}:{ss}
+            </span>
+            <span className="text-xs font-semibold uppercase tracking-widest mt-1"
+              style={{ color: `${color}bb` }}>
+              {label}
+            </span>
+            {running && (
+              <span className="w-1.5 h-1.5 rounded-full mt-1 animate-pulse"
+                style={{ backgroundColor: color }} />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-5 p-7 rounded-2xl shadow-lg w-80 mx-auto select-none"
