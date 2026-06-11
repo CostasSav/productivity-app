@@ -19,7 +19,7 @@ import { booksRouter, bookNotesRouter, bookQuotesRouter, bookLearningsRouter, bi
 import { db, flushMigrations } from './db/database';
 import { requireAuth } from './middleware/auth';
 
-const dataDir = path.join(__dirname, '../data');
+const dataDir = process.env.DATA_DIR ?? path.join(__dirname, '../data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 flushMigrations();
 db.unpinStaleTasks();
