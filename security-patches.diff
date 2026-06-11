@@ -1,0 +1,270 @@
+diff --git a/client/src/api/index.ts b/client/src/api/index.ts
+index 185327b..ac2e01c 100644
+--- a/client/src/api/index.ts
++++ b/client/src/api/index.ts
+@@ -3,10 +3,16 @@ import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, P
+ interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
+ interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
+ 
++const APP_TOKEN = import.meta.env.VITE_APP_TOKEN as string | undefined;
++
+ async function request<T>(url: string, options?: RequestInit): Promise<T> {
+   const res = await fetch(url, {
+-    headers: { 'Content-Type': 'application/json' },
+     ...options,
++    headers: {
++      'Content-Type': 'application/json',
++      ...(APP_TOKEN ? { Authorization: `Bearer ${APP_TOKEN}` } : {}),
++      ...(options?.headers ?? {}),
++    },
+   });
+   if (!res.ok) {
+     const body = await res.json().catch(() => ({}));
+diff --git a/client/src/vite-env.d.ts b/client/src/vite-env.d.ts
+new file mode 100644
+index 0000000..5801665
+--- /dev/null
++++ b/client/src/vite-env.d.ts
+@@ -0,0 +1,9 @@
++/// <reference types="vite/client" />
++
++interface ImportMetaEnv {
++  readonly VITE_APP_TOKEN?: string;
++}
++
++interface ImportMeta {
++  readonly env: ImportMetaEnv;
++}
+diff --git a/server/package.json b/server/package.json
+index bb7fca1..35e80f3 100644
+--- a/server/package.json
++++ b/server/package.json
+@@ -10,7 +10,9 @@
+     "@anthropic-ai/sdk": "^0.52.0",
+     "cors": "^2.8.5",
+     "dotenv": "^16.0.0",
+-    "express": "^4.21.0"
++    "express": "^4.21.0",
++    "express-rate-limit": "^8.5.2",
++    "helmet": "^8.2.0"
+   },
+   "devDependencies": {
+     "@types/cors": "^2.8.0",
+diff --git a/server/src/index.ts b/server/src/index.ts
+index e1e457a..8afdde4 100644
+--- a/server/src/index.ts
++++ b/server/src/index.ts
+@@ -1,6 +1,8 @@
+ import 'dotenv/config';
+ import express from 'express';
+ import cors from 'cors';
++import helmet from 'helmet';
++import rateLimit from 'express-rate-limit';
+ import path from 'path';
+ import fs from 'fs';
+ import tasksRouter from './routes/tasks';
+@@ -15,6 +17,7 @@ import { groceryRouter, groceryStaplesRouter } from './routes/grocery';
+ import { sleepRouter, sleepSettingsRouter } from './routes/sleep';
+ import { booksRouter, bookNotesRouter, bookQuotesRouter, bookLearningsRouter, bibliothecaSettingsRouter } from './routes/bibliotheca';
+ import { db, flushMigrations } from './db/database';
++import { requireAuth } from './middleware/auth';
+ 
+ const dataDir = path.join(__dirname, '../data');
+ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+@@ -24,8 +27,26 @@ db.unpinStaleTasks();
+ const app = express();
+ const PORT = process.env.PORT ?? 3001;
+ 
+-app.use(cors());
+-app.use(express.json());
++// ── Security hardening ────────────────────────────────
++app.use(helmet());
++
++// Lock CORS to the deployed frontend origin. Comma-separate multiple origins.
++// Falls back to permissive CORS in local dev when ALLOWED_ORIGINS is unset.
++const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean);
++app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : {}));
++
++// Cap request body size (defense against memory abuse on the JSON-file DB)
++app.use(express.json({ limit: '1mb' }));
++
++// All API routes require the bearer token (see middleware/auth.ts)
++app.use('/api', requireAuth);
++
++// Strict rate limit on AI routes — these spend your Anthropic credits
++const aiLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
++// General limit on everything else
++const apiLimiter = rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false });
++app.use('/api/ai', aiLimiter);
++app.use('/api', apiLimiter);
+ 
+ app.use('/api/sections', sectionsRouter);
+ app.use('/api/tasks', tasksRouter);
+diff --git a/server/src/middleware/auth.ts b/server/src/middleware/auth.ts
+new file mode 100644
+index 0000000..d5f144e
+--- /dev/null
++++ b/server/src/middleware/auth.ts
+@@ -0,0 +1,40 @@
++import type { Request, Response, NextFunction } from 'express';
++
++/**
++ * Simple bearer-token auth for a single-user deployment.
++ * Set APP_TOKEN in your .env (e.g. a long random string from `openssl rand -hex 32`).
++ * The client must send:  Authorization: Bearer <token>
++ *
++ * If APP_TOKEN is not set, the middleware refuses all requests in production
++ * and allows everything in development (so local dev keeps working unchanged).
++ */
++export function requireAuth(req: Request, res: Response, next: NextFunction): void {
++  const expected = process.env.APP_TOKEN;
++
++  if (!expected) {
++    if (process.env.NODE_ENV === 'production') {
++      res.status(503).json({ error: 'Server misconfigured: APP_TOKEN is not set.' });
++      return;
++    }
++    next(); // local dev without a token
++    return;
++  }
++
++  const header = req.headers.authorization ?? '';
++  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
++
++  if (!token || !timingSafeEqualStr(token, expected)) {
++    res.status(401).json({ error: 'Unauthorized' });
++    return;
++  }
++  next();
++}
++
++// Constant-time comparison to avoid timing attacks on the token
++import { timingSafeEqual } from 'crypto';
++function timingSafeEqualStr(a: string, b: string): boolean {
++  const ab = Buffer.from(a);
++  const bb = Buffer.from(b);
++  if (ab.length !== bb.length) return false;
++  return timingSafeEqual(ab, bb);
++}
+diff --git a/server/src/routes/ai.ts b/server/src/routes/ai.ts
+index ce81fa4..9ad32f5 100644
+--- a/server/src/routes/ai.ts
++++ b/server/src/routes/ai.ts
+@@ -9,13 +9,13 @@ import type { ExtractedTask } from '../ai/extractTasks';
+ const router = Router();
+ 
+ function handleAiError(err: unknown, res: any) {
++  console.error('[AI Error]', err);
+   if (err instanceof Anthropic.AuthenticationError) {
+-    res.status(401).json({ error: 'Invalid API key. Check your ANTHROPIC_API_KEY in .env' });
++    res.status(401).json({ error: 'AI service is not configured correctly.' }); // details stay in server logs
+   } else if (err instanceof Anthropic.RateLimitError) {
+     res.status(429).json({ error: 'Rate limited by Claude API. Try again in a moment.' });
+   } else {
+-    console.error('[AI Error]', err);
+-    res.status(500).json({ error: 'AI request failed. Check server logs.' });
++    res.status(500).json({ error: 'AI request failed.' });
+   }
+ }
+ 
+@@ -59,6 +59,9 @@ router.post('/explain-term', async (req, res) => {
+   if (!term || typeof term !== 'string' || !term.trim()) {
+     res.status(400).json({ error: 'term is required' }); return;
+   }
++  if (term.trim().length > 100) {
++    res.status(400).json({ error: 'term must be under 100 characters' }); return;
++  }
+   try {
+     const response = await anthropic.messages.create({
+       model: 'claude-sonnet-4-6',
+diff --git a/server/src/routes/bibliotheca.ts b/server/src/routes/bibliotheca.ts
+index 3863a81..2682fc7 100644
+--- a/server/src/routes/bibliotheca.ts
++++ b/server/src/routes/bibliotheca.ts
+@@ -10,6 +10,15 @@ const bibliothecaSettingsRouter = Router();
+ 
+ const VALID_STATUSES: BookStatus[] = ['reading', 'finished', 'want-to-read', 'dnf'];
+ 
++// Only accept cover URLs from the OpenLibrary CDN to avoid storing arbitrary external URLs
++function safeCoverUrl(value: unknown): string | null {
++  if (!value || typeof value !== 'string') return null;
++  try {
++    const u = new URL(value);
++    return u.protocol === 'https:' && u.hostname === 'covers.openlibrary.org' ? value : null;
++  } catch { return null; }
++}
++
+ // ── Books ─────────────────────────────────────────────────────────────────────
+ 
+ // GET /api/books/stats — before /:id to avoid param capture
+@@ -67,7 +76,7 @@ booksRouter.post('/', (req, res) => {
+     title: title.trim(),
+     author: String(author).trim(),
+     status: (status as BookStatus) ?? 'want-to-read',
+-    coverUrl: coverUrl ? String(coverUrl) : null,
++    coverUrl: safeCoverUrl(coverUrl),
+     openLibraryKey: openLibraryKey ? String(openLibraryKey) : null,
+     totalPages: typeof totalPages === 'number' ? totalPages : null,
+     currentPage: typeof currentPage === 'number' ? currentPage : 0,
+@@ -101,7 +110,14 @@ booksRouter.patch('/:id', (req, res) => {
+   if (status !== undefined && !VALID_STATUSES.includes(status as BookStatus)) {
+     res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` }); return;
+   }
+-  const book = db.updateBook(id, req.body);
++  // Whitelist updatable fields — never pass req.body straight through (mass assignment)
++  const ALLOWED_FIELDS = ['title', 'author', 'status', 'coverUrl', 'openLibraryKey', 'totalPages', 'currentPage', 'rating', 'genre', 'tags', 'synopsis', 'dnfReason', 'recommendedBy', 'startedAt', 'finishedAt'] as const;
++  const updates: Record<string, unknown> = {};
++  for (const field of ALLOWED_FIELDS) {
++    if (field in req.body) updates[field] = req.body[field];
++  }
++  if ('coverUrl' in updates) updates.coverUrl = safeCoverUrl(updates.coverUrl);
++  const book = db.updateBook(id, updates);
+   if (!book) { res.status(404).json({ error: 'not found' }); return; }
+   res.json(book);
+ });
+diff --git a/server/src/routes/tasks.ts b/server/src/routes/tasks.ts
+index dcf986f..03955c0 100644
+--- a/server/src/routes/tasks.ts
++++ b/server/src/routes/tasks.ts
+@@ -4,6 +4,15 @@ import type { Priority, TaskStatus, RecurrenceType } from '../types';
+ 
+ const router = Router();
+ 
++const VALID_PRIORITIES = ['low', 'medium', 'high'];
++const VALID_STATUSES = ['todo', 'in_progress', 'done'];
++const VALID_RECURRENCES = ['daily', 'weekly', 'monthly'];
++const MAX_TITLE = 500;
++
++function badEnum(res: any, field: string, allowed: string[]): void {
++  res.status(400).json({ error: `${field} must be one of: ${allowed.join(', ')}` });
++}
++
+ router.get('/', (req, res) => {
+   const sectionId = req.query.section_id !== undefined ? Number(req.query.section_id) : undefined;
+   res.json(db.getTasks(sectionId));
+@@ -11,10 +20,13 @@ router.get('/', (req, res) => {
+ 
+ router.post('/', (req, res) => {
+   const { title, description, priority, deadline, note_id, section_id, recurrence, recurrence_day, recurrence_time } = req.body;
+-  if (!title?.trim()) {
++  if (!title?.trim() || typeof title !== 'string') {
+     res.status(400).json({ error: 'title is required' });
+     return;
+   }
++  if (title.length > MAX_TITLE) { res.status(400).json({ error: `title must be under ${MAX_TITLE} characters` }); return; }
++  if (priority !== undefined && priority !== null && !VALID_PRIORITIES.includes(priority)) { badEnum(res, 'priority', VALID_PRIORITIES); return; }
++  if (recurrence !== undefined && recurrence !== null && !VALID_RECURRENCES.includes(recurrence)) { badEnum(res, 'recurrence', VALID_RECURRENCES); return; }
+   const task = db.createTask({
+     title: title.trim(),
+     description: description ?? null,
+@@ -36,6 +48,10 @@ router.post('/', (req, res) => {
+ router.put('/:id', (req, res) => {
+   const id = Number(req.params.id);
+   const { title, description, status, priority, deadline, section_id, recurrence, recurrence_day, recurrence_time, pinnedToday } = req.body;
++  if (title !== undefined && (typeof title !== 'string' || !title.trim() || title.length > MAX_TITLE)) { res.status(400).json({ error: 'invalid title' }); return; }
++  if (status !== undefined && !VALID_STATUSES.includes(status)) { badEnum(res, 'status', VALID_STATUSES); return; }
++  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) { badEnum(res, 'priority', VALID_PRIORITIES); return; }
++  if (recurrence !== undefined && recurrence !== null && !VALID_RECURRENCES.includes(recurrence)) { badEnum(res, 'recurrence', VALID_RECURRENCES); return; }
+   const result = db.updateTask(id, {
+     ...(title !== undefined && { title }),
+     ...(description !== undefined && { description }),

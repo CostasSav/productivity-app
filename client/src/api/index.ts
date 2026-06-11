@@ -3,10 +3,16 @@ import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, P
 interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
 interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
 
+const APP_TOKEN = import.meta.env.VITE_APP_TOKEN as string | undefined;
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(APP_TOKEN ? { Authorization: `Bearer ${APP_TOKEN}` } : {}),
+      ...(options?.headers ?? {}),
+    },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

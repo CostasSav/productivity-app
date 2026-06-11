@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import tasksRouter from './routes/tasks';
@@ -15,6 +17,7 @@ import { groceryRouter, groceryStaplesRouter } from './routes/grocery';
 import { sleepRouter, sleepSettingsRouter } from './routes/sleep';
 import { booksRouter, bookNotesRouter, bookQuotesRouter, bookLearningsRouter, bibliothecaSettingsRouter } from './routes/bibliotheca';
 import { db, flushMigrations } from './db/database';
+import { requireAuth } from './middleware/auth';
 
 const dataDir = path.join(__dirname, '../data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -24,8 +27,26 @@ db.unpinStaleTasks();
 const app = express();
 const PORT = process.env.PORT ?? 3001;
 
-app.use(cors());
-app.use(express.json());
+// ── Security hardening ────────────────────────────────
+app.use(helmet());
+
+// Lock CORS to the deployed frontend origin. Comma-separate multiple origins.
+// Falls back to permissive CORS in local dev when ALLOWED_ORIGINS is unset.
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean);
+app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : {}));
+
+// Cap request body size (defense against memory abuse on the JSON-file DB)
+app.use(express.json({ limit: '1mb' }));
+
+// All API routes require the bearer token (see middleware/auth.ts)
+app.use('/api', requireAuth);
+
+// Strict rate limit on AI routes — these spend your Anthropic credits
+const aiLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+// General limit on everything else
+const apiLimiter = rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false });
+app.use('/api/ai', aiLimiter);
+app.use('/api', apiLimiter);
 
 app.use('/api/sections', sectionsRouter);
 app.use('/api/tasks', tasksRouter);

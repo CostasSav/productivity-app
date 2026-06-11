@@ -4,6 +4,15 @@ import type { Priority, TaskStatus, RecurrenceType } from '../types';
 
 const router = Router();
 
+const VALID_PRIORITIES = ['low', 'medium', 'high'];
+const VALID_STATUSES = ['todo', 'in_progress', 'done'];
+const VALID_RECURRENCES = ['daily', 'weekly', 'monthly'];
+const MAX_TITLE = 500;
+
+function badEnum(res: any, field: string, allowed: string[]): void {
+  res.status(400).json({ error: `${field} must be one of: ${allowed.join(', ')}` });
+}
+
 router.get('/', (req, res) => {
   const sectionId = req.query.section_id !== undefined ? Number(req.query.section_id) : undefined;
   res.json(db.getTasks(sectionId));
@@ -11,10 +20,13 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const { title, description, priority, deadline, note_id, section_id, recurrence, recurrence_day, recurrence_time } = req.body;
-  if (!title?.trim()) {
+  if (!title?.trim() || typeof title !== 'string') {
     res.status(400).json({ error: 'title is required' });
     return;
   }
+  if (title.length > MAX_TITLE) { res.status(400).json({ error: `title must be under ${MAX_TITLE} characters` }); return; }
+  if (priority !== undefined && priority !== null && !VALID_PRIORITIES.includes(priority)) { badEnum(res, 'priority', VALID_PRIORITIES); return; }
+  if (recurrence !== undefined && recurrence !== null && !VALID_RECURRENCES.includes(recurrence)) { badEnum(res, 'recurrence', VALID_RECURRENCES); return; }
   const task = db.createTask({
     title: title.trim(),
     description: description ?? null,
@@ -36,6 +48,10 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   const id = Number(req.params.id);
   const { title, description, status, priority, deadline, section_id, recurrence, recurrence_day, recurrence_time, pinnedToday } = req.body;
+  if (title !== undefined && (typeof title !== 'string' || !title.trim() || title.length > MAX_TITLE)) { res.status(400).json({ error: 'invalid title' }); return; }
+  if (status !== undefined && !VALID_STATUSES.includes(status)) { badEnum(res, 'status', VALID_STATUSES); return; }
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) { badEnum(res, 'priority', VALID_PRIORITIES); return; }
+  if (recurrence !== undefined && recurrence !== null && !VALID_RECURRENCES.includes(recurrence)) { badEnum(res, 'recurrence', VALID_RECURRENCES); return; }
   const result = db.updateTask(id, {
     ...(title !== undefined && { title }),
     ...(description !== undefined && { description }),

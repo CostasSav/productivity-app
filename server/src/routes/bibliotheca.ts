@@ -10,6 +10,15 @@ const bibliothecaSettingsRouter = Router();
 
 const VALID_STATUSES: BookStatus[] = ['reading', 'finished', 'want-to-read', 'dnf'];
 
+// Only accept cover URLs from the OpenLibrary CDN to avoid storing arbitrary external URLs
+function safeCoverUrl(value: unknown): string | null {
+  if (!value || typeof value !== 'string') return null;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' && u.hostname === 'covers.openlibrary.org' ? value : null;
+  } catch { return null; }
+}
+
 // ── Books ─────────────────────────────────────────────────────────────────────
 
 // GET /api/books/stats — before /:id to avoid param capture
@@ -67,7 +76,7 @@ booksRouter.post('/', (req, res) => {
     title: title.trim(),
     author: String(author).trim(),
     status: (status as BookStatus) ?? 'want-to-read',
-    coverUrl: coverUrl ? String(coverUrl) : null,
+    coverUrl: safeCoverUrl(coverUrl),
     openLibraryKey: openLibraryKey ? String(openLibraryKey) : null,
     totalPages: typeof totalPages === 'number' ? totalPages : null,
     currentPage: typeof currentPage === 'number' ? currentPage : 0,
@@ -101,7 +110,14 @@ booksRouter.patch('/:id', (req, res) => {
   if (status !== undefined && !VALID_STATUSES.includes(status as BookStatus)) {
     res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` }); return;
   }
-  const book = db.updateBook(id, req.body);
+  // Whitelist updatable fields — never pass req.body straight through (mass assignment)
+  const ALLOWED_FIELDS = ['title', 'author', 'status', 'coverUrl', 'openLibraryKey', 'totalPages', 'currentPage', 'rating', 'genre', 'tags', 'synopsis', 'dnfReason', 'recommendedBy', 'startedAt', 'finishedAt'] as const;
+  const updates: Record<string, unknown> = {};
+  for (const field of ALLOWED_FIELDS) {
+    if (field in req.body) updates[field] = req.body[field];
+  }
+  if ('coverUrl' in updates) updates.coverUrl = safeCoverUrl(updates.coverUrl);
+  const book = db.updateBook(id, updates);
   if (!book) { res.status(404).json({ error: 'not found' }); return; }
   res.json(book);
 });

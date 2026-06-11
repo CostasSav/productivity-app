@@ -9,13 +9,13 @@ import type { ExtractedTask } from '../ai/extractTasks';
 const router = Router();
 
 function handleAiError(err: unknown, res: any) {
+  console.error('[AI Error]', err);
   if (err instanceof Anthropic.AuthenticationError) {
-    res.status(401).json({ error: 'Invalid API key. Check your ANTHROPIC_API_KEY in .env' });
+    res.status(401).json({ error: 'AI service is not configured correctly.' }); // details stay in server logs
   } else if (err instanceof Anthropic.RateLimitError) {
     res.status(429).json({ error: 'Rate limited by Claude API. Try again in a moment.' });
   } else {
-    console.error('[AI Error]', err);
-    res.status(500).json({ error: 'AI request failed. Check server logs.' });
+    res.status(500).json({ error: 'AI request failed.' });
   }
 }
 
@@ -58,6 +58,9 @@ router.post('/explain-term', async (req, res) => {
   const { term } = req.body;
   if (!term || typeof term !== 'string' || !term.trim()) {
     res.status(400).json({ error: 'term is required' }); return;
+  }
+  if (term.trim().length > 100) {
+    res.status(400).json({ error: 'term must be under 100 characters' }); return;
   }
   try {
     const response = await anthropic.messages.create({
