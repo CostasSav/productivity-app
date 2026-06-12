@@ -19,6 +19,7 @@ import { useNotes } from './hooks/useNotes';
 import { useTasksContext } from './context/TasksContext';
 import { useSections } from './hooks/useSections';
 import { useDarkMode } from './context/DarkModeContext';
+import { useMobile } from './hooks/useMobile';
 import { api } from './api';
 import type { Note, Task } from './types';
 
@@ -86,6 +87,7 @@ export default function App() {
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const { dark, toggle } = useDarkMode();
+  const isMobile = useMobile();
   const [moreExpanded, setMoreExpanded] = useState(() => localStorage.getItem('sidebar_more_expanded') === 'true');
   const [sectionsExpanded, setSectionsExpanded] = useState(() => localStorage.getItem('sidebar_sections_expanded') === 'true');
   const [missingSleepEntry, setMissingSleepEntry] = useState(false);
@@ -120,8 +122,10 @@ export default function App() {
   }, [focusTask]);
 
   useEffect(() => {
-    if (!selectedNoteId && notes.length > 0) setSelectedNoteId(notes[0].id);
-  }, [notes]);
+    // On desktop, pre-select the first note so the editor is never blank.
+    // On mobile, skip — the list view is the default and the user picks from there.
+    if (!isMobile && !selectedNoteId && notes.length > 0) setSelectedNoteId(notes[0].id);
+  }, [notes, isMobile]);
 
   useEffect(() => {
     const init = async () => {
@@ -251,51 +255,34 @@ export default function App() {
   return (
     <div className="flex flex-col md:flex-row h-screen bg-gray-50 dark:bg-[#111113] font-sans">
 
-      {/* Mobile top bar — hidden on md+ */}
-      <div className="md:hidden flex-shrink-0 h-14 flex items-center justify-between px-4 bg-white dark:bg-[#09090b] border-b border-gray-200 dark:border-white/[0.06] z-10">
-        <button
-          onClick={() => setMobileMenuOpen(true)}
-          aria-label="Open menu"
-          className="p-2 -ml-1 rounded text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-teal-600 rounded flex items-center justify-center flex-shrink-0 shadow-sm">
-            <Icon d="M13 10V3L4 14h7v7l9-11h-7z" className="w-3.5 h-3.5 text-white" />
-          </div>
-          <span className="text-sm font-bold text-gray-900 dark:text-white">My Workspace</span>
-        </div>
-        <button
-          onClick={toggle}
-          aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="p-2 -mr-1 rounded text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/[0.06] transition-colors"
-        >
-          {dark
-            ? <Icon d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
-            : <Icon d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          }
-        </button>
-      </div>
+      {/* ── Mobile hamburger — fixed top-left, always visible on mobile ── */}
+      <button
+        onClick={() => setMobileMenuOpen(m => !m)}
+        aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}
+        aria-expanded={mobileMenuOpen}
+        className="md:hidden fixed top-4 left-4 z-[60] p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-white dark:bg-[#09090b] border border-gray-200 dark:border-white/[0.06] shadow-sm text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] active:scale-95 transition-all cursor-pointer"
+      >
+        {mobileMenuOpen
+          ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+          : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+        }
+      </button>
 
-      {/* Mobile backdrop */}
-      {mobileMenuOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
+      {/* ── Mobile backdrop — always in DOM, fades in/out ── */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/50 md:hidden transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
 
       {/* Sidebar */}
       <aside className={`
-        flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden
+        flex flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden
         border-r border-gray-200 dark:border-white/[0.06] bg-white dark:bg-[#09090b]
-        transition-all duration-300
-        ${mobileMenuOpen
-          ? 'flex fixed inset-y-0 left-0 z-50 w-64 shadow-2xl'
-          : 'hidden md:flex md:relative md:inset-auto md:shadow-none md:flex-shrink-0'}
+        fixed inset-y-0 left-0 z-50 w-64 shadow-2xl
+        transition-transform duration-300 ease-in-out
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:relative md:inset-auto md:shadow-none md:flex-shrink-0 md:translate-x-0
         ${collapsed ? 'md:w-14' : 'md:w-52'}
       `}>
 
@@ -483,7 +470,7 @@ export default function App() {
           </div>
         )}
         {view === 'calendar' && (
-          <div className="flex-1 overflow-y-auto p-8 animate-fade-in">
+          <div className="flex-1 flex flex-col overflow-hidden md:overflow-y-auto md:p-8 animate-fade-in">
             <CalendarView tasks={tasks} sections={sections} onUpdateTask={updateTask} onCreateTask={createTask} onCreateSection={createSection} />
           </div>
         )}
@@ -528,40 +515,48 @@ export default function App() {
         )}
         {view === 'notes' && (
           <div className="flex-1 flex overflow-hidden animate-fade-in">
-            <div className={selectedNoteId ? 'hidden md:flex md:flex-col md:h-full md:flex-shrink-0' : 'flex flex-col h-full w-full'}>
+            {/* List panel — always visible on desktop; on mobile only when no note is open */}
+            {(!isMobile || !selectedNoteId) && (
               <NoteList
                 notes={notes} sections={sections} loading={notesLoading}
                 selectedId={selectedNoteId} onSelect={id => setSelectedNoteId(id)}
                 onNew={() => handleNewNote()} onDelete={handleDeleteNote}
               />
-            </div>
-            <div className={`${!selectedNoteId ? 'hidden md:flex' : 'flex'} flex-1 overflow-hidden flex-col bg-white dark:bg-[#111113]`}>
-              {selectedNoteId && (
-                <button
-                  onClick={() => setSelectedNoteId(null)}
-                  className="md:hidden flex items-center gap-1.5 px-4 py-3 border-b border-gray-200 dark:border-zinc-800/60 text-sm font-medium text-teal-600 dark:text-teal-400 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors flex-shrink-0 cursor-pointer"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  All notes
-                </button>
-              )}
-              {activeNote ? (
-                <NoteEditor
-                  key={activeNote.id} note={activeNote} sections={sections}
-                  onUpdate={handleUpdateNote} onTasksAdded={() => {}}
-                  onNoteUpdated={handleNoteUpdated} onCreateSection={createSection}
-                />
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500">
-                  <div className="text-center">
-                    <p className="text-lg mb-2">No note selected</p>
-                    <button onClick={() => handleNewNote()} className="text-teal-600 hover:underline text-sm dark:text-teal-400 cursor-pointer">Create a new note</button>
+            )}
+
+            {/* Editor panel — always visible on desktop; on mobile only when a note is open */}
+            {(!isMobile || !!selectedNoteId) && (
+              <div className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-[#111113]">
+                {/* ← Back button: mobile only, shown when a note is open */}
+                {isMobile && selectedNoteId && (
+                  <button
+                    onClick={() => setSelectedNoteId(null)}
+                    className="flex items-center gap-1.5 px-4 min-h-[44px] border-b border-gray-200 dark:border-zinc-800/60 text-sm font-medium text-teal-600 dark:text-teal-400 hover:bg-gray-50 dark:hover:bg-zinc-800/50 active:bg-gray-100 dark:active:bg-zinc-800 transition-colors flex-shrink-0 cursor-pointer"
+                    aria-label="Back to notes list"
+                  >
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    All notes
+                  </button>
+                )}
+
+                {activeNote ? (
+                  <NoteEditor
+                    key={activeNote.id} note={activeNote} sections={sections}
+                    onUpdate={handleUpdateNote} onTasksAdded={() => {}}
+                    onNoteUpdated={handleNoteUpdated} onCreateSection={createSection}
+                  />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-400 dark:text-gray-500">
+                    <div className="text-center">
+                      <p className="text-lg mb-2">No note selected</p>
+                      <button onClick={() => handleNewNote()} className="text-teal-600 hover:underline text-sm dark:text-teal-400 cursor-pointer">Create a new note</button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         {typeof view === 'object' && view.type === 'section' && currentSection && (

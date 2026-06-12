@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Task, Section } from '../../types';
 import { TaskForm } from '../tasks/TaskForm';
+import { CalendarDayView } from './CalendarDayView';
+import { useMobile } from '../../hooks/useMobile';
 
 interface CalendarViewProps {
   tasks: Task[];
@@ -51,6 +53,9 @@ function buildCalendar(year: number, month: number): (string | null)[][] {
 }
 
 export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCreateSection, filterSectionId }: CalendarViewProps) {
+  // useMobile must be first so all hooks always run in the same order
+  const isMobile = useMobile();
+
   const today = new Date().toISOString().split('T')[0];
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [month, setMonth] = useState(() => new Date().getMonth());
@@ -277,6 +282,20 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
       </div>
     );
   };
+
+  // ── Mobile: render the day view instead of the grid ─────────────────────────
+  if (isMobile) {
+    return (
+      <CalendarDayView
+        tasks={tasks}
+        sections={sections}
+        onCreateTask={onCreateTask}
+        onUpdateTask={onUpdateTask}
+        onCreateSection={onCreateSection}
+        filterSectionId={filterSectionId}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col">
