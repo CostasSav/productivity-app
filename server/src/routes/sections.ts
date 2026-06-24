@@ -8,20 +8,21 @@ router.get('/', (_req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { name, color } = req.body;
+  const { name, color, source } = req.body;
   if (!name?.trim()) {
     res.status(400).json({ error: 'name is required' });
     return;
   }
-  const section = db.createSection({ name: name.trim(), color: color ?? '#6366f1' });
+  const section = db.createSection({ name: name.trim(), color: color ?? '#6366f1', source: source ?? null });
   res.status(201).json(section);
 });
 
 router.put('/:id', (req, res) => {
-  const { name, color } = req.body;
+  const { name, color, source } = req.body;
   const updated = db.updateSection(Number(req.params.id), {
     ...(name !== undefined && { name }),
     ...(color !== undefined && { color }),
+    ...(source !== undefined && { source }),
   });
   if (!updated) {
     res.status(404).json({ error: 'Section not found' });

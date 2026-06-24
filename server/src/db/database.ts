@@ -3,7 +3,9 @@ import path from 'path';
 import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory, SleepEntry, SleepSettings, SleepStats, Book, BookNote, BookQuote, BookLearning, BibliothecaSettings, BookStats, BookWithCounts, BookStatus } from '../types';
 import { GROCERY_CATEGORIES } from '../types';
 
-const DB_PATH = path.join(__dirname, '../../data/db.json');
+const DB_PATH = process.env.DATA_DIR
+  ? path.join(process.env.DATA_DIR, 'db.json')
+  : path.join(__dirname, '../../data/db.json');
 
 interface DbData {
   sections: Section[];
@@ -290,15 +292,15 @@ export const db = {
   getSection(id: number): Section | undefined {
     return load().sections.find(s => s.id === id);
   },
-  createSection(fields: Pick<Section, 'name' | 'color'>): Section {
+  createSection(fields: Pick<Section, 'name' | 'color'> & { source?: string | null }): Section {
     const data = load();
     data._sectionSeq += 1;
-    const section: Section = { ...fields, id: data._sectionSeq, created_at: now() };
+    const section: Section = { ...fields, source: fields.source ?? null, id: data._sectionSeq, created_at: now() };
     data.sections.push(section);
     save(data);
     return section;
   },
-  updateSection(id: number, fields: Partial<Pick<Section, 'name' | 'color'>>): Section | undefined {
+  updateSection(id: number, fields: Partial<Pick<Section, 'name' | 'color' | 'source'>>): Section | undefined {
     const data = load();
     const idx = data.sections.findIndex(s => s.id === id);
     if (idx === -1) return undefined;

@@ -1,5 +1,4 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
 import type { Note, ExtractedTask, SummaryResult, Priority, Section } from '../../types';
 import { api } from '../../api';
 import { Spinner } from '../ui/Spinner';
@@ -153,7 +152,6 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [sectionId, setSectionId] = useState<number | null>(note.section_id);
-  const [tab, setTab] = useState<'edit' | 'preview'>('edit');
   const [saving, setSaving] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [summarizing, setSummarizing] = useState(false);
@@ -279,22 +277,14 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
         <SectionSelector sections={sections} value={sectionId} onChange={handleSectionChange} onCreateSection={onCreateSection} />
       </div>
 
-      <div className="flex items-center gap-1 px-6 pb-2 border-b border-gray-200 dark:border-zinc-800/60">
-        <button onClick={() => setTab('edit')} className={`px-3 py-1 text-sm rounded-md font-medium ${tab === 'edit' ? 'bg-gray-200 text-gray-800 dark:bg-zinc-800 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>Edit</button>
-        <button onClick={() => setTab('preview')} className={`px-3 py-1 text-sm rounded-md font-medium ${tab === 'preview' ? 'bg-gray-200 text-gray-800 dark:bg-zinc-800 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}>Preview</button>
+      <div className="flex items-center px-6 pb-2 border-b border-gray-200 dark:border-zinc-800/60">
         <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">{saving ? 'Saving...' : 'Auto-saved'}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {tab === 'edit' ? (
-          <textarea value={content} onChange={e => setContent(e.target.value)} onPaste={handlePaste}
-            className="w-full h-full min-h-64 text-sm text-gray-700 dark:text-gray-200 border-none outline-none resize-none font-mono leading-relaxed bg-transparent"
-            placeholder="Write your note here... (Markdown supported)" />
-        ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            {content ? <ReactMarkdown>{content}</ReactMarkdown> : <p className="text-gray-400 dark:text-gray-500 italic">Nothing to preview.</p>}
-          </div>
-        )}
+        <textarea value={content} onChange={e => setContent(e.target.value)} onPaste={handlePaste}
+          className="w-full h-full min-h-64 text-sm text-gray-700 dark:text-gray-200 border-none outline-none resize-none font-mono leading-relaxed bg-transparent"
+          placeholder="Write your note here... (Markdown supported)" />
       </div>
 
       {aiError && (

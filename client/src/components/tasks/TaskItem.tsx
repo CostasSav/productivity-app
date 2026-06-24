@@ -171,7 +171,9 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
                     className="flex-1 text-sm border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 dark:placeholder-gray-500"
                   />
                   <button onClick={handleAddSubtask} className="text-xs px-2 py-1.5 bg-teal-600 text-white rounded hover:bg-teal-700 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500">Add</button>
-                  <button onClick={() => { setAddingSubtask(false); setNewSubtaskTitle(''); }} className="text-xs px-2 py-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded">âœ•</button>
+                  <button onClick={() => { setAddingSubtask(false); setNewSubtaskTitle(''); }} aria-label="Cancel" className="flex items-center justify-center w-7 h-7 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 rounded transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
                 </div>
               )}
             </div>

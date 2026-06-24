@@ -68,6 +68,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
   const [edgeHint, setEdgeHint] = useState<'left' | 'right' | null>(null);
   const [showBacklog, setShowBacklog] = useState(false);
+  const [dragOverBacklog, setDragOverBacklog] = useState(false);
 
   const edgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragging = draggingTaskId !== null;
@@ -513,7 +514,21 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
           </div>
 
           {/* Panel body */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-4">
+          <div
+            className={`flex-1 overflow-y-auto p-2 space-y-4 transition-colors ${dragOverBacklog ? 'bg-teal-50 dark:bg-teal-900/20' : ''}`}
+            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverBacklog(true); }}
+            onDragLeave={() => setDragOverBacklog(false)}
+            onDrop={e => {
+              e.preventDefault();
+              setDragOverBacklog(false);
+              const raw = e.dataTransfer.getData('taskIds');
+              if (!raw) return;
+              const ids: number[] = JSON.parse(raw);
+              ids.forEach(id => onUpdateTask(id, { deadline: null }));
+              setDraggingTaskId(null);
+              setSelectedTaskIds(new Set());
+            }}
+          >
             {backlogTasks.length === 0 ? (
               <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-8">No unscheduled tasks</p>
             ) : (
@@ -567,7 +582,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
 
           {backlogTasks.length > 0 && (
             <div className="border-t border-gray-200 dark:border-zinc-700/60 px-3 py-2 flex-shrink-0">
-              <p className="text-[10px] text-gray-400 dark:text-gray-500">Drag a task onto a date to schedule it</p>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">Drag to a date to schedule · drag here to unschedule</p>
             </div>
           )}
         </div>
