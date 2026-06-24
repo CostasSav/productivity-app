@@ -15,7 +15,7 @@ import { Settings } from './pages/Settings';
 import { Grocery } from './pages/Grocery';
 import { Sleep } from './pages/Sleep';
 import { Bibliotheca } from './pages/Bibliotheca';
-import { useNotes } from './hooks/useNotes';
+import { useNotes, useNote, useUpdateNote } from './hooks/useNotes';
 import { useTasksContext } from './context/TasksContext';
 import { useSections } from './hooks/useSections';
 import { useDarkMode } from './context/DarkModeContext';
@@ -82,7 +82,9 @@ export default function App() {
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(() => {
     try { const v = sessionStorage.getItem(SESSION_NOTE_KEY); return v ? Number(v) : null; } catch { return null; }
   });
-  const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const noteQuery = useNote(selectedNoteId);
+  const activeNote = noteQuery.data ?? null;
+  const updateNoteMutation = useUpdateNote();
   const [focusTask, setFocusTask] = useState<{ id: number; title: string } | null>(() => readSessionFocusTask());
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
@@ -164,11 +166,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!selectedNoteId) { setActiveNote(null); return; }
-    api.notes.get(selectedNoteId).then(setActiveNote).catch(() => {});
-  }, [selectedNoteId]);
-
-  useEffect(() => {
     const hour = new Date().getHours();
     if (hour < 6 || hour >= 12) return;
     const today = new Date().toISOString().split('T')[0];
@@ -197,9 +194,7 @@ export default function App() {
   };
 
   const handleUpdateNote = async (id: number, data: Partial<Note>) => {
-    const updated = await api.notes.update(id, data);
-    setActiveNote(updated);
-    return updated;
+    return updateNoteMutation.mutateAsync({ id, data });
   };
 
   const handleNoteUpdated = (id: number, updates: { title: string; summary: string | null; section_id: number | null }) => {

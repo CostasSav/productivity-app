@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { api } from '../api';
+import { useGratitude } from '../hooks/useGratitude';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -412,9 +412,8 @@ export function Gratitude() {
   const today = new Date().toISOString().split('T')[0];
   const prompts = getDayPrompts(today);
 
-  const [todayEntry, setTodayEntry] = useState(undefined); // undefined = loading
-  const [allEntries, setAllEntries] = useState([]);
-  const [settings, setSettings] = useState(null);
+  const { todayEntry, allEntries, settings, saveGratitude, updateSettings } = useGratitude();
+
   const [step, setStep] = useState(1);
   const [items, setItems] = useState(['', '', '']);
   const [currentText, setCurrentText] = useState('');
@@ -427,18 +426,13 @@ export function Gratitude() {
   const startedAtRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Set initial step based on settings once they load.
+  const initialStepSet = useRef(false);
   useEffect(() => {
-    Promise.all([
-      api.gratitude.today(),
-      api.gratitude.list(),
-      api.gratitudeSettings.get(),
-    ]).then(([entry, entries, s]) => {
-      setTodayEntry(entry);
-      setAllEntries(entries);
-      setSettings(s);
-      if (!entry) setStep(s.onboardingComplete ? 1 : 0);
-    }).catch(console.error);
-  }, []);
+    if (initialStepSet.current || settings === null || todayEntry === undefined) return;
+    initialStepSet.current = true;
+    if (!todayEntry) setStep(settings.onboardingComplete ? 1 : 0);
+  }, [settings, todayEntry]);
 
   // Autofocus textarea; record ritual start time on step 1
   useEffect(() => {
@@ -451,12 +445,12 @@ export function Gratitude() {
     }
   }, [step]);
 
-  // Auto-redirect from completion screen after 3 s
+  // Auto-redirect from completion screen after 3 s (step is reset on next mount)
   useEffect(() => {
     if (step !== 5) return;
-    const id = setTimeout(() => { setTodayEntry(savedEntry); setEditMode(false); }, 3000);
+    const id = setTimeout(() => setEditMode(false), 3000);
     return () => clearTimeout(id);
-  }, [step, savedEntry]);
+  }, [step]);
 
   const handleNext = useCallback(() => {
     if (currentText.trim().length < 3) return;
@@ -477,15 +471,13 @@ export function Gratitude() {
       const durationSeconds = startedAtRef.current
         ? Math.round((Date.now() - startedAtRef.current.getTime()) / 1000)
         : 0;
-      const entry = await api.gratitude.save({
+      const entry = await saveGratitude({
         items, mood, durationSeconds, completedAt: new Date().toISOString(),
       });
       setSavedEntry(entry);
       if (settings && !settings.onboardingComplete) {
-        const updated = await api.gratitudeSettings.update({ onboardingComplete: true });
-        setSettings(updated);
+        await updateSettings({ onboardingComplete: true });
       }
-      api.gratitude.list().then(setAllEntries).catch(() => {});
       setStep(5);
     } catch (err) {
       console.error(err);
@@ -597,7 +589,7 @@ export function Gratitude() {
     return (
       <div
         className="min-h-full flex flex-col items-center justify-center px-4 py-12 cursor-pointer select-none"
-        onClick={() => { setTodayEntry(savedEntry); setEditMode(false); }}
+        onClick={() => setEditMode(false)}
       >
         <div className="text-center max-w-sm">
           <p className="text-3xl font-medium text-gray-800 dark:text-gray-100 mb-5 leading-snug">

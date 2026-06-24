@@ -10,7 +10,10 @@
       "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"productivity app dashboard SaaS dark mode\" --design-system)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ConstantinosSAVVIDIS\\\\TestClaudeCode\\\\client\\\\src\" -Recurse -Include \"*.jsx\", \"*.tsx\")",
       "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"touch target mobile responsive sidebar\" --domain ux -n 8)"
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"touch target mobile responsive sidebar\" --domain ux -n 8)",
+      "Bash(node -e \"console.log\\('build check'\\)\")",
+      "Bash(npx vite *)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\ConstantinosSAVVIDIS\\\\TestClaudeCode\" -Recurse -Directory | Where-Object { $_.Name -match \"\\(client|api\\)\" } | Select-Object -ExpandProperty FullName)"
     ]
   }
 }

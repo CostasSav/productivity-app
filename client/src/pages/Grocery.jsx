@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, useRef, forwardRef } from 'react';
+import { useState, useCallback, useMemo, useRef, forwardRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { GROCERY_CATEGORIES } from '../types';
+import { useGrocery, GROCERY_KEY, STAPLES_KEY } from '../hooks/useGrocery';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -626,9 +628,12 @@ function StaplesPanel({ open, onClose, staples, items, onAddStaple, onDeleteStap
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function Grocery() {
-  const [items, setItems] = useState([]);
-  const [staples, setStaples] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { items: rawItems, staples, loading: itemsLoading, staplesLoading } = useGrocery();
+  const queryClient = useQueryClient();
+
+  const loading = itemsLoading || staplesLoading;
+  const items = useMemo(() => sortItems(rawItems), [rawItems]);
+
   const [showStaples, setShowStaples] = useState(false);
   const [shopping, setShopping] = useState(false);
   const [editItem, setEditItem] = useState(null);
@@ -650,18 +655,6 @@ export function Grocery() {
     requestAnimationFrame(() => setToast({ message: msg, onUndo }));
   }, []);
 
-  const loadAll = useCallback(async () => {
-    const [itemList, stapleList] = await Promise.all([
-      api.grocery.list(),
-      api.groceryStaples.list(),
-    ]);
-    setItems(sortItems(itemList));
-    setStaples(stapleList);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { loadAll(); }, [loadAll]);
-
   const stapleByName = useMemo(() => {
     const m = new Map();
     staples.forEach(s => m.set(s.name.toLowerCase(), s));
@@ -675,55 +668,69 @@ export function Grocery() {
 
   const handleToggle = useCallback(async (id, checked) => {
     const updated = await api.grocery.update(id, { checked });
-    setItems(prev => prev.map(i => i.id === id ? updated : i));
-  }, []);
+    queryClient.setQueryData(GROCERY_KEY, prev =>
+      (prev ?? []).map(i => i.id === id ? updated : i)
+    );
+  }, [queryClient]);
 
   const handleDeleteItem = useCallback(async (id) => {
     await api.grocery.delete(id);
-    setItems(prev => prev.filter(i => i.id !== id));
-  }, []);
+    queryClient.setQueryData(GROCERY_KEY, prev =>
+      (prev ?? []).filter(i => i.id !== id)
+    );
+  }, [queryClient]);
 
   const handleClearChecked = useCallback(() => {
     const removed = items.filter(i => i.checked);
     if (!removed.length) return;
 
-    setItems(prev => prev.filter(i => !i.checked));
+    queryClient.setQueryData(GROCERY_KEY, prev =>
+      (prev ?? []).filter(i => !i.checked)
+    );
 
     if (clearCheckedTimerRef.current) clearTimeout(clearCheckedTimerRef.current);
     clearCheckedTimerRef.current = setTimeout(() => {
-      api.grocery.deleteChecked().catch(() => {});
+      api.grocery.deleteChecked()
+        .then(() => queryClient.invalidateQueries({ queryKey: GROCERY_KEY }))
+        .catch(() => {});
     }, 5000);
 
     const undo = () => {
       clearTimeout(clearCheckedTimerRef.current);
       clearCheckedTimerRef.current = null;
-      setItems(prev => sortItems([...prev, ...removed]));
+      queryClient.setQueryData(GROCERY_KEY, prev =>
+        sortItems([...(prev ?? []), ...removed])
+      );
       setToast(null);
     };
 
     showToast(`Removed ${removed.length} item${removed.length !== 1 ? 's' : ''} — `, undo);
-  }, [items, showToast]);
+  }, [items, queryClient, showToast]);
 
   const handleClearAndExit = useCallback(async () => {
     await api.grocery.deleteChecked();
-    setItems(prev => prev.filter(i => !i.checked));
+    queryClient.setQueryData(GROCERY_KEY, prev =>
+      (prev ?? []).filter(i => !i.checked)
+    );
     setShopping(false);
-  }, []);
+  }, [queryClient]);
 
   const handleAddItem = useCallback(async ({ name, quantity, unit }) => {
     setAddingItem(true);
     try {
       const item = await api.grocery.add({ name, quantity, unit });
-      setItems(prev => sortItems([...prev, item]));
+      queryClient.setQueryData(GROCERY_KEY, prev => [...(prev ?? []), item]);
     } finally {
       setAddingItem(false);
     }
-  }, []);
+  }, [queryClient]);
 
   const handleUpdateItem = useCallback(async (id, fields) => {
     const updated = await api.grocery.update(id, fields);
-    setItems(prev => sortItems(prev.map(i => i.id === id ? updated : i)));
-  }, []);
+    queryClient.setQueryData(GROCERY_KEY, prev =>
+      (prev ?? []).map(i => i.id === id ? updated : i)
+    );
+  }, [queryClient]);
 
   // ── Drag handlers ──────────────────────────────────────
 
@@ -748,12 +755,14 @@ export function Grocery() {
     reordered.splice(from, 1);
     reordered.splice(to, 0, dragId);
     const orderMap = new Map(reordered.map((id, idx) => [id, idx]));
-    setItems(prev => sortItems(prev.map(i => orderMap.has(i.id) ? { ...i, order: orderMap.get(i.id) } : i)));
+    queryClient.setQueryData(GROCERY_KEY, prev =>
+      (prev ?? []).map(i => orderMap.has(i.id) ? { ...i, order: orderMap.get(i.id) } : i)
+    );
     api.grocery.reorder(reordered).catch(() => {});
     setDragId(null);
     setDragOverId(null);
     setDragCategory(null);
-  }, [dragId, dragCategory, items]);
+  }, [dragId, dragCategory, items, queryClient]);
 
   const handleDragEnd = useCallback(() => {
     setDragId(null);
@@ -767,12 +776,14 @@ export function Grocery() {
     const existing = stapleByName.get(item.name.toLowerCase());
     if (existing) {
       await api.groceryStaples.delete(existing.id);
-      setStaples(prev => prev.filter(s => s.id !== existing.id));
+      queryClient.setQueryData(STAPLES_KEY, prev =>
+        (prev ?? []).filter(s => s.id !== existing.id)
+      );
     } else {
       const staple = await api.groceryStaples.add({ name: item.name, quantity: item.quantity, unit: item.unit });
-      setStaples(prev => [...prev, staple]);
+      queryClient.setQueryData(STAPLES_KEY, prev => [...(prev ?? []), staple]);
     }
-  }, [stapleByName]);
+  }, [stapleByName, queryClient]);
 
   // ── Staple panel handlers ──────────────────────────────
 
@@ -780,26 +791,27 @@ export function Grocery() {
     setAddingStaple(true);
     try {
       const staple = await api.groceryStaples.add({ name, quantity, unit });
-      setStaples(prev => [...prev, staple]);
+      queryClient.setQueryData(STAPLES_KEY, prev => [...(prev ?? []), staple]);
     } finally {
       setAddingStaple(false);
     }
-  }, []);
+  }, [queryClient]);
 
   const handleDeleteStaple = useCallback(async (id) => {
     await api.groceryStaples.delete(id);
-    setStaples(prev => prev.filter(s => s.id !== id));
-  }, []);
+    queryClient.setQueryData(STAPLES_KEY, prev =>
+      (prev ?? []).filter(s => s.id !== id)
+    );
+  }, [queryClient]);
 
   const handleAddAllToList = useCallback(async () => {
     const { added, skipped } = await api.groceryStaples.addToList();
-    const fresh = await api.grocery.list();
-    setItems(sortItems(fresh));
+    await queryClient.invalidateQueries({ queryKey: GROCERY_KEY });
     const parts = [];
     if (added > 0) parts.push(`${added} staple${added !== 1 ? 's' : ''} added`);
     if (skipped > 0) parts.push(`${skipped} already on list`);
     showToast(parts.join(' · ') || 'Nothing to add');
-  }, [showToast]);
+  }, [queryClient, showToast]);
 
   // ── Render ─────────────────────────────────────────────
 

@@ -102,7 +102,10 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
           <div className="flex items-center gap-2 flex-wrap">
             <p className={`font-medium ${task.status === 'done' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-100'}`}>{task.title}</p>
             {recurLabel && (
-              <span className="text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 px-2 py-0.5 rounded-full font-medium flex-shrink-0"><svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> {recurLabel}</span>
+              <span className="inline-flex items-center gap-1 text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+                <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                {recurLabel}
+              </span>
             )}
           </div>
           {task.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{task.description}</p>}
@@ -117,13 +120,18 @@ export function TaskItem({ task, sections, onUpdate, onDelete, onCreateSection, 
             <StatusBadge status={task.status} />
             {section && <SectionBadge section={section} />}
             {task.deadline && (
-              <span className={`text-xs font-medium font-mono tabular-nums ${overdue ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                {overdue ? 'âš  Overdue: ' : 'Due: '}{formatDate(task.deadline)}
+              <span className={`inline-flex items-center gap-1 text-xs font-medium font-mono tabular-nums ${overdue ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                {overdue && (
+                  <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                )}
+                {overdue ? 'Overdue: ' : 'Due: '}{formatDate(task.deadline)}
               </span>
             )}
             {pomodoroCount > 0 && (
               <span className="text-xs text-gray-400 dark:text-gray-500" title={`${pomodoroCount} Pomodoro session${pomodoroCount !== 1 ? 's' : ''} logged`}>
-                ðŸ… {pomodoroCount}
+                {pomodoroCount}
               </span>
             )}
           </div>

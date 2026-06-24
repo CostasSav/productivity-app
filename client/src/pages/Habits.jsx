@@ -1,10 +1,9 @@
 ﻿import { useState, useRef, useCallback } from 'react';
-import { useHabits } from '../hooks/useHabits';
+import { useHabits, useArchivedHabits, useRestoreHabit } from '../hooks/useHabits';
 import { useSections } from '../hooks/useSections';
 import { Spinner } from '../components/ui/Spinner';
 import { Modal } from '../components/ui/Modal';
 import { SectionSelector } from '../components/sections/SectionSelector';
-import { api } from '../api';
 import {
   localDateStr, logToLocalDate, getLast7Days, getLast28Days,
   isDue, isWeekFullyComplete, calcCurrentStreak, calcLongestStreak, calcRate30,
@@ -553,7 +552,7 @@ function HabitsEmptyState({ onCreate }) {
 // â"€â"€ Habits page â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export function Habits() {
-  const { habits, logs, loading, createHabit, updateHabit, archiveHabit, reorderHabits, logHabit, unlogHabit, reload } = useHabits();
+  const { habits, logs, loading, createHabit, updateHabit, archiveHabit, reorderHabits, logHabit, unlogHabit } = useHabits();
   const { sections, createSection } = useSections();
   const [formTarget, setFormTarget] = useState(null);
 
@@ -563,8 +562,10 @@ export function Habits() {
 
   // Archive view state
   const [showArchived, setShowArchived] = useState(false);
-  const [archivedHabits, setArchivedHabits] = useState([]);
-  const [archivedLoading, setArchivedLoading] = useState(false);
+  const archivedQuery = useArchivedHabits(showArchived);
+  const restoreMutation = useRestoreHabit();
+  const archivedHabits = archivedQuery.data ?? [];
+  const archivedLoading = archivedQuery.isLoading;
 
   const isFormOpen = formTarget !== null;
   const isEditing = isFormOpen && formTarget !== undefined;
@@ -603,21 +604,10 @@ export function Habits() {
     setDragOverId(null);
   }, []);
 
-  // Archive toggle
-  const handleToggleArchived = async () => {
-    if (!showArchived && archivedHabits.length === 0) {
-      setArchivedLoading(true);
-      const archived = await api.habits.listArchived();
-      setArchivedHabits(archived);
-      setArchivedLoading(false);
-    }
-    setShowArchived(v => !v);
-  };
+  const handleToggleArchived = () => setShowArchived(v => !v);
 
   const handleRestore = async (id) => {
-    await api.habits.update(id, { archivedAt: null });
-    setArchivedHabits(prev => prev.filter(h => h.id !== id));
-    await reload();
+    await restoreMutation.mutateAsync(id);
   };
 
   return (

@@ -1,28 +1,29 @@
 import { useState, useEffect } from 'react';
-import { api } from '../api';
+import { useGratitude, useUpdateGratitudeSettings } from '../hooks/useGratitude';
 import { Spinner } from '../components/ui/Spinner';
 
 export function Settings() {
+  const { settings: querySettings } = useGratitude();
+  const updateSettingsMutation = useUpdateGratitudeSettings();
   const [settings, setSettings] = useState(null);
-  const [saving, setSaving] = useState(false);
   const [savedLabel, setSavedLabel] = useState('');
   const [resetStep, setResetStep] = useState(0); // 0=idle, 1=confirm, 2=done
 
+  // Populate local settings from cache on first load
   useEffect(() => {
-    api.gratitudeSettings.get().then(setSettings).catch(console.error);
-  }, []);
+    if (querySettings && !settings) setSettings(querySettings);
+  }, [querySettings]);
+
+  const saving = updateSettingsMutation.isPending;
 
   const save = async (updates) => {
-    setSaving(true);
     try {
-      const updated = await api.gratitudeSettings.update(updates);
+      const updated = await updateSettingsMutation.mutateAsync(updates);
       setSettings(updated);
       setSavedLabel('Saved');
       setTimeout(() => setSavedLabel(''), 2000);
     } catch (err) {
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   };
 

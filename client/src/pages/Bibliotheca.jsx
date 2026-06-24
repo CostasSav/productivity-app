@@ -1,7 +1,19 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
+import {
+  BOOKS_KEY, BOOK_STATS_KEY, BIBLIOTHECA_SETTINGS_KEY,
+  useBibliotheca, useBookDetail,
+  useCreateBook, useUpdateBook, useDeleteBook, useUpdateBookPage,
+  useUpdateBibliothecaSettings,
+  useCreateBookNote, useUpdateBookNote, useDeleteBookNote,
+  useCreateBookQuote, useDeleteBookQuote,
+  useCreateBookLearning, useUpdateBookLearning, useDeleteBookLearning,
+  useSearchOpenLibrary, useExplainTerm, useQuizInsight,
+  useBookLearnings,
+} from '../hooks/useBibliotheca';
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
 
@@ -351,10 +363,7 @@ function fmtDate(iso) {
 // ── Book Detail View ───────────────────────────────────────────────────────────
 
 function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 'notes' }) {
-  const [notes, setNotes] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const [learnings, setLearnings] = useState([]);
-  const [contentLoading, setContentLoading] = useState(true);
+  const { notes, quotes, learnings, contentLoading } = useBookDetail(book.id);
   const [detailTab, setDetailTab] = useState(initialTab);
 
   // Page editing
@@ -366,36 +375,30 @@ function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 
   // Notes form
   const [noteContent, setNoteContent] = useState('');
   const [notePage, setNotePage] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
   const [editingNote, setEditingNote] = useState(null); // { id, content, pageNumber }
 
   // Quotes form
   const [quoteText, setQuoteText] = useState('');
   const [quotePage, setQuotePage] = useState('');
-  const [savingQuote, setSavingQuote] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
   // Learnings form
   const [learnTerm, setLearnTerm] = useState('');
   const [learnDef, setLearnDef] = useState('');
   const [learnPage, setLearnPage] = useState('');
-  const [savingLearning, setSavingLearning] = useState(false);
-  const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState('');
   const [editingLearning, setEditingLearning] = useState(null); // { id, term, definition, pageNumber }
 
-  useEffect(() => {
-    setContentLoading(true);
-    Promise.all([
-      api.bookNotes.list(book.id),
-      api.bookQuotes.list(book.id),
-      api.bookLearnings.list({ bookId: book.id }),
-    ]).then(([n, q, l]) => {
-      setNotes(n);
-      setQuotes(q);
-      setLearnings(l);
-    }).catch(() => {}).finally(() => setContentLoading(false));
-  }, [book.id]);
+  const updatePageMutation   = useUpdateBookPage();
+  const createNoteMutation   = useCreateBookNote();
+  const updateNoteMutation   = useUpdateBookNote();
+  const deleteNoteMutation   = useDeleteBookNote();
+  const createQuoteMutation  = useCreateBookQuote();
+  const deleteQuoteMutation  = useDeleteBookQuote();
+  const createLearningMutation = useCreateBookLearning();
+  const updateLearningMutation = useUpdateBookLearning();
+  const deleteLearningMutation = useDeleteBookLearning();
+  const explainTermMutation  = useExplainTerm();
 
   // ── Progress derived ───────────────────────────────────────────────────────
 
@@ -420,7 +423,7 @@ function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 
     if (isNaN(n) || n < 0 || n === currentPage) return;
     setSavingPage(true);
     try {
-      const updated = await api.books.update(book.id, { currentPage: n });
+      const updated = await updatePageMutation.mutateAsync({ id: book.id, currentPage: n });
       onBookChanged(updated);
     } catch {}
     setSavingPage(false);
@@ -430,36 +433,31 @@ function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 
 
   const saveNote = async () => {
     if (!noteContent.trim()) return;
-    setSavingNote(true);
     try {
-      const note = await api.bookNotes.create({
+      await createNoteMutation.mutateAsync({
         bookId: book.id,
         content: noteContent.trim(),
         pageNumber: toPage(notePage),
       });
-      setNotes(prev => [note, ...prev]);
       setNoteContent('');
       setNotePage('');
     } catch {}
-    setSavingNote(false);
   };
 
   const updateNote = async () => {
     if (!editingNote?.content?.trim()) return;
     try {
-      const updated = await api.bookNotes.update(editingNote.id, {
-        content: editingNote.content.trim(),
-        pageNumber: toPage(editingNote.pageNumber),
+      await updateNoteMutation.mutateAsync({
+        id: editingNote.id,
+        data: { content: editingNote.content.trim(), pageNumber: toPage(editingNote.pageNumber) },
       });
-      setNotes(prev => prev.map(n => n.id === editingNote.id ? updated : n));
       setEditingNote(null);
     } catch {}
   };
 
   const deleteNote = async (id) => {
     try {
-      await api.bookNotes.delete(id);
-      setNotes(prev => prev.filter(n => n.id !== id));
+      await deleteNoteMutation.mutateAsync({ id, bookId: book.id });
     } catch {}
   };
 
@@ -467,24 +465,20 @@ function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 
 
   const saveQuote = async () => {
     if (!quoteText.trim()) return;
-    setSavingQuote(true);
     try {
-      const quote = await api.bookQuotes.create({
+      await createQuoteMutation.mutateAsync({
         bookId: book.id,
         text: quoteText.trim(),
         pageNumber: toPage(quotePage),
       });
-      setQuotes(prev => [quote, ...prev]);
       setQuoteText('');
       setQuotePage('');
     } catch {}
-    setSavingQuote(false);
   };
 
   const deleteQuote = async (id) => {
     try {
-      await api.bookQuotes.delete(id);
-      setQuotes(prev => prev.filter(q => q.id !== id));
+      await deleteQuoteMutation.mutateAsync({ id, bookId: book.id });
     } catch {}
   };
 
@@ -499,55 +493,58 @@ function BookDetailView({ book, onBack, onOpenEdit, onBookChanged, initialTab = 
 
   const explainTerm = async () => {
     if (!learnTerm.trim()) return;
-    setExplaining(true);
     setExplainError('');
     try {
-      const res = await api.ai.explainTerm(learnTerm.trim());
+      const res = await explainTermMutation.mutateAsync(learnTerm.trim());
       setLearnDef(res.explanation);
     } catch (err) {
       setExplainError(err.message || 'Failed to get explanation');
     }
-    setExplaining(false);
   };
 
   const saveLearning = async () => {
     if (!learnTerm.trim() || !learnDef.trim()) return;
-    setSavingLearning(true);
     try {
-      const learning = await api.bookLearnings.create({
+      await createLearningMutation.mutateAsync({
         bookId: book.id,
         term: learnTerm.trim(),
         definition: learnDef.trim(),
         pageNumber: toPage(learnPage),
       });
-      setLearnings(prev => [learning, ...prev]);
       setLearnTerm('');
       setLearnDef('');
       setLearnPage('');
       setExplainError('');
     } catch {}
-    setSavingLearning(false);
   };
 
   const updateLearning = async () => {
     if (!editingLearning?.term?.trim() || !editingLearning?.definition?.trim()) return;
     try {
-      const updated = await api.bookLearnings.update(editingLearning.id, {
-        term: editingLearning.term.trim(),
-        definition: editingLearning.definition.trim(),
-        pageNumber: toPage(editingLearning.pageNumber),
+      await updateLearningMutation.mutateAsync({
+        id: editingLearning.id,
+        bookId: book.id,
+        data: {
+          term: editingLearning.term.trim(),
+          definition: editingLearning.definition.trim(),
+          pageNumber: toPage(editingLearning.pageNumber),
+        },
       });
-      setLearnings(prev => prev.map(l => l.id === editingLearning.id ? updated : l));
       setEditingLearning(null);
     } catch {}
   };
 
   const deleteLearning = async (id) => {
     try {
-      await api.bookLearnings.delete(id);
-      setLearnings(prev => prev.filter(l => l.id !== id));
+      await deleteLearningMutation.mutateAsync({ id, bookId: book.id });
     } catch {}
   };
+
+  // ── Derived UI state ───────────────────────────────────────────────────────
+  const savingNote     = createNoteMutation.isPending;
+  const savingQuote    = createQuoteMutation.isPending;
+  const savingLearning = createLearningMutation.isPending;
+  const explaining     = explainTermMutation.isPending;
 
   // ── Icon shortcuts ─────────────────────────────────────────────────────────
 
@@ -1476,14 +1473,16 @@ function BookModal({ mode, book, existingGenres, onClose, onSaved, onDeleted }) 
   const [phase, setPhase] = useState(isEdit ? 'form' : 'search');
   const [form, setForm] = useState(() => initForm(book ?? null));
   const [titleError, setTitleError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [changingCover, setChangingCover] = useState(false);
 
+  const createBook = useCreateBook();
+  const updateBook = useUpdateBook();
+  const deleteBook = useDeleteBook();
+  const searchOpenLibrary = useSearchOpenLibrary();
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
-  const [searching, setSearching] = useState(false);
   const searchTimer = useRef(null);
   const queryRef = useRef(null);
 
@@ -1500,14 +1499,12 @@ function BookModal({ mode, book, existingGenres, onClose, onSaved, onDeleted }) 
   const handleQueryChange = (val) => {
     setQuery(val);
     clearTimeout(searchTimer.current);
-    if (!val.trim()) { setResults([]); setSearching(false); return; }
-    setSearching(true);
+    if (!val.trim()) { setResults([]); return; }
     searchTimer.current = setTimeout(async () => {
       try {
-        const res = await api.books.searchOpenLibrary(val.trim());
+        const res = await searchOpenLibrary.mutateAsync(val.trim());
         setResults(res);
       } catch { setResults([]); }
-      setSearching(false);
     }, 400);
   };
 
@@ -1528,26 +1525,26 @@ function BookModal({ mode, book, existingGenres, onClose, onSaved, onDeleted }) 
   const handleSubmit = async () => {
     if (!form.title.trim()) { setTitleError('Title is required'); return; }
     setTitleError('');
-    setSaving(true);
     try {
       const payload = buildPayload(form);
       const saved = isEdit
-        ? await api.books.update(book.id, payload)
-        : await api.books.create(payload);
+        ? await updateBook.mutateAsync({ id: book.id, data: payload })
+        : await createBook.mutateAsync(payload);
       onSaved(saved);
-    } catch {
-      setSaving(false);
-    }
+    } catch {}
   };
 
   const handleDelete = async () => {
-    setDeleting(true);
     try {
-      await api.books.delete(book.id);
+      await deleteBook.mutateAsync(book.id);
       onDeleted();
-    } catch { setDeleting(false); }
+    } catch {}
   };
 
+  const saving  = createBook.isPending || updateBook.isPending;
+  const deleting = deleteBook.isPending;
+
+  const searching  = searchOpenLibrary.isPending;
   const modalTitle = isEdit ? (book?.title ? `Edit: ${book.title}` : 'Edit Book') : 'Add Book';
 
   return createPortal(
@@ -1845,28 +1842,29 @@ function AddLearningModal({ books, onClose, onSaved }) {
   const [term, setTerm] = useState('');
   const [def, setDef] = useState('');
   const [page, setPage] = useState('');
-  const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState('');
-  const [saving, setSaving] = useState(false);
+
+  const createLearning = useCreateBookLearning();
+  const explainTermMutation = useExplainTerm();
+
+  const explaining = explainTermMutation.isPending;
+  const saving     = createLearning.isPending;
 
   const explainTerm = async () => {
     if (!term.trim()) return;
-    setExplaining(true);
     setExplainError('');
     try {
-      const res = await api.ai.explainTerm(term.trim());
+      const res = await explainTermMutation.mutateAsync(term.trim());
       setDef(res.explanation);
     } catch (err) {
       setExplainError(err.message || 'Failed to get explanation');
     }
-    setExplaining(false);
   };
 
   const save = async () => {
     if (!bookId || !term.trim() || !def.trim()) return;
-    setSaving(true);
     try {
-      const learning = await api.bookLearnings.create({
+      const learning = await createLearning.mutateAsync({
         bookId: Number(bookId),
         term: term.trim(),
         definition: def.trim(),
@@ -1874,7 +1872,6 @@ function AddLearningModal({ books, onClose, onSaved }) {
       });
       onSaved(learning);
     } catch {}
-    setSaving(false);
   };
 
   const SPARK_PATH = 'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z';
@@ -1958,25 +1955,19 @@ const SORT_OPTIONS = [
 ];
 
 function GlobalLearningsTab({ books, onOpenDetail, filterIds = null, onClearFilter }) {
-  const [learnings, setLearnings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const learningsQuery = useBookLearnings();
+  const learnings = learningsQuery.data ?? [];
+  const loading   = learningsQuery.isLoading;
+
+  const deleteLearningMutation = useDeleteBookLearning();
+  const updateLearningMutation = useUpdateBookLearning();
+
   const [search, setSearch] = useState('');
   const [bookFilter, setBookFilter] = useState('all');
   const [sort, setSort] = useState('newest');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ term: '', definition: '', pageNumber: '' });
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api.bookLearnings.list();
-      setLearnings(data);
-    } catch {}
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const bookMap = useMemo(() => {
     const m = {};
@@ -2026,10 +2017,9 @@ function GlobalLearningsTab({ books, onOpenDetail, filterIds = null, onClearFilt
     return items;
   }, [learnings, filterIds, bookFilter, search, sort, bookMap]);
 
-  const deleteLearning = async (id) => {
+  const deleteLearning = async (learning) => {
     try {
-      await api.bookLearnings.delete(id);
-      setLearnings(prev => prev.filter(l => l.id !== id));
+      await deleteLearningMutation.mutateAsync({ id: learning.id, bookId: learning.bookId });
     } catch {}
   };
 
@@ -2038,21 +2028,23 @@ function GlobalLearningsTab({ books, onOpenDetail, filterIds = null, onClearFilt
     setEditForm({ term: l.term, definition: l.definition, pageNumber: l.pageNumber ?? '' });
   };
 
-  const commitEdit = async () => {
+  const commitEdit = async (learning) => {
     if (!editForm.term.trim() || !editForm.definition.trim()) return;
     try {
-      const updated = await api.bookLearnings.update(editingId, {
-        term: editForm.term.trim(),
-        definition: editForm.definition.trim(),
-        pageNumber: editForm.pageNumber !== '' ? parseInt(editForm.pageNumber, 10) : null,
+      await updateLearningMutation.mutateAsync({
+        id: editingId,
+        bookId: learning.bookId,
+        data: {
+          term: editForm.term.trim(),
+          definition: editForm.definition.trim(),
+          pageNumber: editForm.pageNumber !== '' ? parseInt(editForm.pageNumber, 10) : null,
+        },
       });
-      setLearnings(prev => prev.map(l => l.id === updated.id ? updated : l));
       setEditingId(null);
     } catch {}
   };
 
-  const handleSaved = (learning) => {
-    setLearnings(prev => [learning, ...prev]);
+  const handleSaved = () => {
     setShowAddModal(false);
   };
 
@@ -2197,7 +2189,7 @@ function GlobalLearningsTab({ books, onOpenDetail, filterIds = null, onClearFilt
                         onChange={e => setEditForm(f => ({ ...f, pageNumber: e.target.value }))}
                         placeholder="Page #"
                         className="w-24 px-2 py-1.5 text-xs border border-gray-200 dark:border-zinc-700 rounded-lg bg-transparent text-gray-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-teal-500" />
-                      <button onClick={commitEdit}
+                      <button onClick={() => commitEdit(learning)}
                         className="px-3 py-1.5 text-xs font-semibold bg-teal-600 text-white rounded-lg cursor-pointer hover:bg-teal-700">
                         Save
                       </button>
@@ -2216,7 +2208,7 @@ function GlobalLearningsTab({ books, onOpenDetail, filterIds = null, onClearFilt
                           className={`${actionBtn} text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200`}>
                           <EditIcon />
                         </button>
-                        <button onClick={() => deleteLearning(learning.id)}
+                        <button onClick={() => deleteLearning(learning)}
                           className={`${actionBtn} text-gray-400 hover:text-rose-500`}>
                           <TrashIcon />
                         </button>
@@ -2274,8 +2266,10 @@ const STAR_PATH_QUIZ = 'M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0
 
 function QuizTab({ books, onGoToLearnings }) {
   const [phase, setPhase] = useState('setup'); // 'setup' | 'playing' | 'results'
-  const [allLearnings, setAllLearnings] = useState([]);
-  const [loadingLearnings, setLoadingLearnings] = useState(true);
+
+  const learningsQuery = useBookLearnings();
+  const allLearnings   = learningsQuery.data ?? [];
+  const loadingLearnings = learningsQuery.isLoading;
 
   // Setup options
   const [qCount, setQCount] = useState(5);
@@ -2289,20 +2283,12 @@ function QuizTab({ books, onGoToLearnings }) {
   const [revealed, setRevealed] = useState(false);
   const [results, setResults] = useState([]); // { learning, result: 'got'|'missed'|'skipped' }
 
+  const quizInsightMutation = useQuizInsight();
+
   // Results state
   const [insight, setInsight] = useState('');
-  const [insightLoading, setInsightLoading] = useState(false);
   const [insightError, setInsightError] = useState('');
-
-  const loadQuiz = useCallback(async () => {
-    try {
-      const data = await api.bookLearnings.list();
-      setAllLearnings(data);
-    } catch {}
-    setLoadingLearnings(false);
-  }, []);
-
-  useEffect(() => { loadQuiz(); }, [loadQuiz]);
+  const insightLoading = quizInsightMutation.isPending;
 
   const bookMap = useMemo(() => {
     const m = {};
@@ -2365,17 +2351,16 @@ function QuizTab({ books, onGoToLearnings }) {
     const missed = finalResults.filter(r => r.result === 'missed').map(r => r.learning);
     const got = finalResults.filter(r => r.result === 'got').length;
     if (missed.length > 0) {
-      setInsightLoading(true);
-      api.ai.quizInsight({
+      setInsight('');
+      setInsightError('');
+      quizInsightMutation.mutateAsync({
         score: got,
         total: finalResults.length,
         missedTerms: missed.map(l => ({ term: l.term, definition: l.definition })),
       }).then(res => {
         setInsight(res.insight);
-        setInsightLoading(false);
       }).catch(err => {
         setInsightError(err.message || 'Could not generate insight.');
-        setInsightLoading(false);
       });
     }
   };
@@ -2682,11 +2667,11 @@ const STATUS_FILTERS = [
 // ── Main Export ────────────────────────────────────────────────────────────────
 
 export function Bibliotheca() {
+  const queryClient = useQueryClient();
+  const { books, stats, settings, loading } = useBibliotheca();
+  const updateSettingsMutation = useUpdateBibliothecaSettings();
+
   const [tab, setTab] = useState('library');
-  const [books, setBooks] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [settings, setSettings] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [collapsedShelves, setCollapsedShelves] = useState({});
@@ -2699,25 +2684,12 @@ export function Bibliotheca() {
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
 
-  const load = useCallback(async () => {
-    try {
-      const [bookList, statsData, settingsData] = await Promise.all([
-        api.books.list(),
-        api.books.stats(),
-        api.bibliothecaSettings.get(),
-      ]);
-      setBooks(bookList);
-      setStats(statsData);
-      setSettings(settingsData);
-      if (firstLoad.current) {
-        firstLoad.current = false;
-        if (bookList.some(b => b.status === 'reading')) setStatusFilter('reading');
-      }
-    } catch {}
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!loading && firstLoad.current) {
+      firstLoad.current = false;
+      if (books.some(b => b.status === 'reading')) setStatusFilter('reading');
+    }
+  }, [loading, books]);
 
   // ── Derived ──────────────────────────────────────────────────────────────────
 
@@ -2749,27 +2721,27 @@ export function Bibliotheca() {
   const toggleShelf = key => setCollapsedShelves(prev => ({ ...prev, [key]: !prev[key] }));
 
   const handleUpdateGoal = async newGoal => {
-    try { const updated = await api.bibliothecaSettings.update({ yearlyGoal: newGoal }); setSettings(updated); } catch {}
+    try { await updateSettingsMutation.mutateAsync({ yearlyGoal: newGoal }); } catch {}
   };
 
   const handleBookUpdated = useCallback((updatedBook) => {
-    setBooks(prev => prev.map(b => b.id === updatedBook.id ? { ...b, ...updatedBook } : b));
+    queryClient.setQueryData(BOOKS_KEY, prev =>
+      prev?.map(b => b.id === updatedBook.id ? { ...b, ...updatedBook } : b)
+    );
     setSelectedBook(prev => prev && prev.id === updatedBook.id ? { ...prev, ...updatedBook } : prev);
-  }, []);
+  }, [queryClient]);
 
   const handleModalSaved = useCallback((savedBook) => {
-    load();
     setBookModal(null);
     if (savedBook) {
       setSelectedBook(prev => prev && prev.id === savedBook.id ? { ...prev, ...savedBook } : prev);
     }
-  }, [load]);
+  }, []);
 
   const handleModalDeleted = useCallback(() => {
-    load();
     setBookModal(null);
     setSelectedBook(null);
-  }, [load]);
+  }, []);
 
   const openDetail = useCallback((b, tab = 'notes') => {
     setSelectedBook(b);
@@ -2794,10 +2766,12 @@ export function Bibliotheca() {
     const reordered = [...ids];
     reordered.splice(from, 1);
     reordered.splice(to, 0, dragId);
-    setBooks(prev => prev.map(b => { const idx = reordered.indexOf(b.id); return idx !== -1 ? { ...b, wantToReadOrder: idx } : b; }));
+    queryClient.setQueryData(BOOKS_KEY, prev =>
+      prev?.map(b => { const idx = reordered.indexOf(b.id); return idx !== -1 ? { ...b, wantToReadOrder: idx } : b; })
+    );
     reordered.forEach((id, idx) => api.books.update(id, { wantToReadOrder: idx }).catch(() => {}));
     setDragId(null); setDragOverId(null);
-  }, [dragId, books]);
+  }, [dragId, books, queryClient]);
 
   // ── Render ────────────────────────────────────────────────────────────────────
 

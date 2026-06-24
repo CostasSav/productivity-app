@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api } from '../api';
+import { useSleep } from '../hooks/useSleep';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -754,58 +754,34 @@ function WeeklyInsight({ settings, generating, error, onRefresh }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export function Sleep({ onEntrySaved }) {
-  const [todayEntry, setTodayEntry] = useState(undefined);
-  const [entries, setEntries] = useState({});
-  const [stats, setStats] = useState(null);
-  const [settings, setSettings] = useState(null);
+  const {
+    entriesMap: entries,
+    stats,
+    settings,
+    loading,
+    insightGenerating,
+    saveSleep,
+    generateInsight: runGenerateInsight,
+  } = useSleep();
+
   const [editing, setEditing] = useState(false);
   const [toast, setToast] = useState(null);
   const [pastDay, setPastDay] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [insightGenerating, setInsightGenerating] = useState(false);
   const [insightError, setInsightError] = useState(false);
   const insightAutoAttempted = useRef(false);
 
   const weekDays = lastNDays(7);
 
-  const load = useCallback(async () => {
-    try {
-      const [entryList, statsData, settingsData] = await Promise.all([
-        api.sleep.list(),
-        api.sleep.stats(),
-        api.sleepSettings.get(),
-      ]);
-      const map = {};
-      for (const e of entryList) map[e.date] = e;
-      setEntries(map);
-      setTodayEntry(map[todayStr()] ?? null);
-      setStats(statsData);
-      setSettings(settingsData);
-    } catch {
-      setTodayEntry(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const refreshStats = () => {
-    api.sleep.stats().then(setStats).catch(() => {});
-  };
+  const todayEntry = loading ? undefined : (entries[todayStr()] ?? null);
 
   const generateInsight = useCallback(async () => {
-    setInsightGenerating(true);
     setInsightError(false);
     try {
-      const result = await api.sleep.generateInsight();
-      setSettings(prev => prev ? { ...prev, aiInsightText: result.text, aiInsightLastGenerated: result.generatedAt } : prev);
+      await runGenerateInsight();
     } catch {
       setInsightError(true);
-    } finally {
-      setInsightGenerating(false);
     }
-  }, []);
+  }, [runGenerateInsight]);
 
   useEffect(() => {
     if (!settings || insightAutoAttempted.current) return;
@@ -819,20 +795,15 @@ export function Sleep({ onEntrySaved }) {
   }, [settings, generateInsight]);
 
   const handleSaveToday = async data => {
-    const entry = await api.sleep.save({ date: todayStr(), ...data });
-    setTodayEntry(entry);
-    setEntries(prev => ({ ...prev, [todayStr()]: entry }));
+    await saveSleep({ date: todayStr(), ...data });
     setEditing(false);
     setToast('Sleep logged');
-    refreshStats();
     onEntrySaved?.(todayStr());
   };
 
   const handleSavePast = async (date, data) => {
-    const entry = await api.sleep.save({ date, ...data });
-    setEntries(prev => ({ ...prev, [date]: entry }));
+    await saveSleep({ date, ...data });
     setToast('Entry saved');
-    refreshStats();
     onEntrySaved?.(date);
   };
 

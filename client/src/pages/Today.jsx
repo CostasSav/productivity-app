@@ -3,13 +3,15 @@ import { useTasksContext } from '../context/TasksContext';
 import { useSections } from '../hooks/useSections';
 import { usePomodoroSessions } from '../hooks/usePomodoroSessions';
 import { useHabits } from '../hooks/useHabits';
+import { useGratitude } from '../hooks/useGratitude';
+import { useSleep } from '../hooks/useSleep';
+import { useGrocery } from '../hooks/useGrocery';
 import { PriorityBadge } from '../components/ui/Badge';
 import { SectionBadge } from '../components/sections/SectionBadge';
 import { Spinner } from '../components/ui/Spinner';
 import { FloatingPaths } from '../components/ui/background-paths';
 import ScrollExpandMedia from '../components/ui/scroll-expansion-hero';
 import { isDue, localDateStr, logToLocalDate, calcCurrentStreak, getMonday, getWeekLogCount, weeklyCountRemaining } from '../utils/habitStats';
-import { api } from '../api';
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
 const PRIORITY_FALLBACK = { high: '#f87171', medium: '#fbbf24', low: '#4ade80' };
@@ -238,7 +240,7 @@ function SleepSparkline({ entries }) {
   );
 }
 
-function TodaySleepCard({ entry, stats, allEntries, onSaved, onNavigateSleep }) {
+function TodaySleepCard({ entry, stats, allEntries, onSave, onNavigateSleep }) {
   const [bedtime, setBedtime] = useState('');
   const [wakeTime, setWakeTime] = useState('');
   const [quality, setQuality] = useState(null);
@@ -252,14 +254,13 @@ function TodaySleepCard({ entry, stats, allEntries, onSaved, onNavigateSleep }) 
     if (!canSave || saving) return;
     setSaving(true);
     try {
-      const saved = await api.sleep.save({
+      await onSave({
         date: yesterdayStr(),
         bedtime,
         wakeTime,
         quality,
         energy: energy ?? 3,
       });
-      onSaved(saved);
     } finally {
       setSaving(false);
     }
@@ -415,32 +416,16 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery, onN
   const { sections } = useSections();
   const { totalByTaskId, todayByTaskId } = usePomodoroSessions();
   const { habits, logs: habitLogs, loading: habitsLoading, logHabit, unlogHabit } = useHabits();
+  const { todayEntry: gratitudeEntry, settings: gratitudeSettings } = useGratitude();
+  const { entriesMap: sleepEntriesMap, entries: sleepEntries, stats: sleepStats, loading: sleepLoading, saveSleep } = useSleep();
+  const { items: groceryItems, loading: groceryLoading, addItem: addGroceryItemFn, addItemPending: groceryAdding } = useGrocery();
   const [fadingIds, setFadingIds] = useState(new Set());
   const [showToast, setShowToast] = useState(false);
   const toastTimerRef = useRef(null);
-  const [gratitudeEntry, setGratitudeEntry] = useState(undefined);
-  const [gratitudeSettings, setGratitudeSettings] = useState(null);
-  const [groceryItems, setGroceryItems] = useState(null); // null = loading
   const [groceryQuickAdd, setGroceryQuickAdd] = useState('');
-  const [groceryAdding, setGroceryAdding] = useState(false);
-  const [sleepEntry, setSleepEntry] = useState(undefined); // undefined=loading, null=no entry
-  const [sleepStats, setSleepStats] = useState(null);
-  const [sleepAllEntries, setSleepAllEntries] = useState([]);
 
-  useEffect(() => {
-    Promise.all([api.gratitude.today(), api.gratitudeSettings.get()])
-      .then(([entry, s]) => { setGratitudeEntry(entry); setGratitudeSettings(s); })
-      .catch(() => { setGratitudeEntry(null); setGratitudeSettings(null); });
-    api.grocery.list().then(setGroceryItems).catch(() => setGroceryItems([]));
-    const yStr = yesterdayStr();
-    Promise.all([api.sleep.getByDate(yStr), api.sleep.stats(), api.sleep.list()])
-      .then(([entry, stats, entries]) => {
-        setSleepEntry(entry);
-        setSleepStats(stats);
-        setSleepAllEntries(entries.slice(0, 7));
-      })
-      .catch(() => { setSleepEntry(null); setSleepStats(null); setSleepAllEntries([]); });
-  }, []);
+  const sleepEntry = sleepLoading ? undefined : (sleepEntriesMap[yesterdayStr()] ?? null);
+  const sleepAllEntries = sleepEntries.slice(0, 7);
 
   useEffect(() => {
     const handler = () => {
@@ -537,14 +522,12 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery, onN
   const handleGroceryQuickAdd = async (e) => {
     e.preventDefault();
     const name = groceryQuickAdd.trim();
-    if (!name) return;
-    setGroceryAdding(true);
+    if (!name || groceryAdding) return;
     try {
-      await api.grocery.add({ name });
-      setGroceryItems(prev => [...(prev ?? []), { id: Date.now(), name, checked: false }]);
+      await addGroceryItemFn({ name });
       setGroceryQuickAdd('');
-    } finally {
-      setGroceryAdding(false);
+    } catch {
+      // mutation handles cache rollback; ignore UI-level errors here
     }
   };
 
@@ -700,18 +683,14 @@ export function Today({ onFocusTask, onNavigateGratitude, onNavigateGrocery, onN
             entry={sleepEntry}
             stats={sleepStats}
             allEntries={sleepAllEntries}
-            onSaved={saved => {
-              setSleepEntry(saved);
-              api.sleep.stats().then(setSleepStats).catch(() => {});
-              api.sleep.list().then(entries => setSleepAllEntries(entries.slice(0, 7))).catch(() => {});
-            }}
+            onSave={saveSleep}
             onNavigateSleep={onNavigateSleep}
           />
         </section>
       )}
 
       {/* Grocery card */}
-      {groceryItems !== null && (() => {
+      {!groceryLoading && (() => {
         const uncheckedCount = groceryItems.filter(i => !i.checked).length;
         const clear = groceryItems.length === 0;
         return (

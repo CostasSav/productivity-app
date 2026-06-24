@@ -4,9 +4,8 @@ import { TaskList } from '../tasks/TaskList';
 import { NoteList } from '../notes/NoteList';
 import { NoteEditor } from '../notes/NoteEditor';
 import { useTasksContext } from '../../context/TasksContext';
-import { useNotes } from '../../hooks/useNotes';
+import { useNotes, useNote, useUpdateNote } from '../../hooks/useNotes';
 import { useHabits } from '../../hooks/useHabits';
-import { api } from '../../api';
 import { CalendarView } from '../calendar/CalendarView';
 import { isDue, localDateStr, logToLocalDate, calcCurrentStreak, getMonday, getWeekLogCount } from '../../utils/habitStats';
 
@@ -31,7 +30,9 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
   const { habits, logs: habitLogs, logHabit, unlogHabit } = useHabits();
   const [tab, setTab] = useState<'tasks' | 'notes' | 'calendar' | 'habits'>('tasks');
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
-  const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const noteQuery = useNote(selectedNoteId);
+  const activeNote = noteQuery.data ?? null;
+  const updateNoteMutation = useUpdateNote();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(section.name);
   const [editColor, setEditColor] = useState(section.color);
@@ -60,11 +61,6 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
     if (!selectedNoteId && sectionNotes.length > 0) setSelectedNoteId(sectionNotes[0].id);
   }, [sectionNotes.length]);
 
-  useEffect(() => {
-    if (!selectedNoteId) { setActiveNote(null); return; }
-    api.notes.get(selectedNoteId).then(setActiveNote).catch(() => {});
-  }, [selectedNoteId]);
-
   const handleNewNote = async () => {
     const note = await createNote({ title: 'New Note', content: '', section_id: section.id });
     setSelectedNoteId(note.id);
@@ -80,9 +76,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
   };
 
   const handleUpdateNote = async (id: number, data: Partial<Note>) => {
-    const updated = await api.notes.update(id, data);
-    setActiveNote(updated);
-    return updated;
+    return updateNoteMutation.mutateAsync({ id, data });
   };
 
   const handleSaveEdit = async () => {
