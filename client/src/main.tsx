@@ -7,6 +7,7 @@ import { DarkModeProvider } from './context/DarkModeContext';
 import { TasksProvider } from './context/TasksContext';
 import { GlobalFetchingBar, GlobalQueryErrorBanner } from './components/ui/GlobalQueryStatus';
 import './index.css';
+import { PWAUpdatePrompt } from './components/ui/PWAUpdatePrompt';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <GlobalFetchingBar />
       <GlobalQueryErrorBanner />
+      <PWAUpdatePrompt />
       <DarkModeProvider>
         <TasksProvider>
           <App />

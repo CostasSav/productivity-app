@@ -266,7 +266,7 @@ function SummaryCard({ entry, onEdit }) {
 function PastDayModal({ date, entry, onSave, onClose }) {
   const label = new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="safe-overlay fixed inset-0 z-40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 dark:bg-black/60" />
       <div className="relative w-full max-w-sm bg-white dark:bg-[#1c1c1f] rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">

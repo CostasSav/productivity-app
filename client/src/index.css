@@ -2,6 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dynamic viewport follows Safari's toolbar and the standalone viewport. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  overflow: hidden;
+}
+
+.app-shell .flex-1 { min-height: 0; }
+
+.mobile-nav-toggle {
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+  left: calc(1rem + env(safe-area-inset-left, 0px));
+}
+
+.pwa-update {
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  margin-left: env(safe-area-inset-left, 0px);
+  margin-right: env(safe-area-inset-right, 0px);
+}
+
+/* Fixed overlays bypass the shell's padding, so protect their own controls. */
+.safe-overlay {
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+}
+
+@media (max-width: 767px) {
+  .app-sidebar {
+    padding-top: calc(4.5rem + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(0.5rem + env(safe-area-inset-left, 0px));
+  }
+  .fixed.bottom-0 {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .fixed.bottom-6 { bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px)); }
+  .fixed.bottom-4 { bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* Remove 300ms tap delay on mobile */
 button, a, [role="button"], input, select, textarea, label {
   touch-action: manipulation;

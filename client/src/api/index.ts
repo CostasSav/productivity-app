@@ -12,6 +12,8 @@ const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     ...options,
+    // Keep personal API data out of the browser HTTP cache too.
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(APP_TOKEN ? { Authorization: `Bearer ${APP_TOKEN}` } : {}),

@@ -1,4 +1,4 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 interface ModalProps {
@@ -17,7 +17,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 dark:bg-black/60"
+      className="safe-overlay fixed inset-0 z-40 flex items-center justify-center bg-black/40 dark:bg-black/60"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

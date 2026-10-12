@@ -138,7 +138,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const words = APP_NAME.split(' ');
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <div className="safe-overlay fixed inset-0 z-50 overflow-hidden">
 
       {/* ── Canvas: pixel dissolve layer ─────────────────────────────── */}
       <canvas

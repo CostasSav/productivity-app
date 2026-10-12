@@ -248,14 +248,14 @@ export default function App() {
   );
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-gray-50 dark:bg-[#111113] font-sans">
+    <div className="app-shell flex flex-col md:flex-row h-screen bg-gray-50 dark:bg-[#111113] font-sans">
 
       {/* ── Mobile hamburger — fixed top-left, always visible on mobile ── */}
       <button
         onClick={() => setMobileMenuOpen(m => !m)}
         aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'}
         aria-expanded={mobileMenuOpen}
-        className="md:hidden fixed top-4 left-4 z-[60] p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-white dark:bg-[#09090b] border border-gray-200 dark:border-white/[0.06] shadow-sm text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] active:scale-95 transition-all cursor-pointer"
+        className="mobile-nav-toggle md:hidden fixed top-4 left-4 z-[60] p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-white dark:bg-[#09090b] border border-gray-200 dark:border-white/[0.06] shadow-sm text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/[0.06] active:scale-95 transition-all cursor-pointer"
       >
         {mobileMenuOpen
           ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -272,7 +272,7 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className={`
-        flex flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden
+        app-sidebar flex flex-col py-4 px-2 gap-1 overflow-y-auto overflow-x-hidden
         border-r border-gray-200 dark:border-white/[0.06] bg-white dark:bg-[#09090b]
         fixed inset-y-0 left-0 z-50 w-64 shadow-2xl
         transition-transform duration-300 ease-in-out
@@ -423,7 +423,7 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col overflow-hidden relative isolate">
+      <main className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden relative isolate">
 
         {/* Morning sleep log reminder banner */}
         {sleepBannerVisible && (

@@ -98,7 +98,7 @@ export function CommandPalette({ sections, onNavigate, onClose }: CommandPalette
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[18vh] bg-black/40 dark:bg-black/60 animate-fade-in"
+      className="safe-overlay fixed inset-0 z-50 flex items-start justify-center pt-[18vh] bg-black/40 dark:bg-black/60 animate-fade-in"
       onClick={onClose}
     >
       <div

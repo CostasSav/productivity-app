@@ -153,7 +153,7 @@ function EditPopover({ item, onSave, onClose }) {
   const inputCls = 'w-full bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-teal-500';
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center" onMouseDown={handleBackdrop}>
+    <div className="safe-overlay fixed inset-0 z-30 flex items-center justify-center" onMouseDown={handleBackdrop}>
       <div ref={cardRef} className="w-80 bg-white dark:bg-[#1c1c1f] border border-gray-200 dark:border-zinc-700 rounded-2xl shadow-2xl p-5 space-y-3">
         <input
           autoFocus
@@ -305,7 +305,7 @@ function ShoppingMode({ items, onToggle, onExit, onClearAndExit }) {
   const uncheckedGrouped = useMemo(() => groupByCategory(unchecked), [unchecked]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-[#111113] flex flex-col">
+    <div className="safe-overlay fixed inset-0 z-50 bg-gray-50 dark:bg-[#111113] flex flex-col">
 
       {/* Progress header */}
       <div className="flex-shrink-0">
@@ -565,7 +565,7 @@ function StaplesPanel({ open, onClose, staples, items, onAddStaple, onDeleteStap
 
   return (
     <>
-      {open && <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />}
+      {open && <div className="safe-overlay fixed inset-0 bg-black/40 z-40" onClick={onClose} />}
 
       <div className={`fixed top-0 right-0 h-full w-80 bg-white dark:bg-[#09090b] border-l border-gray-200 dark:border-zinc-800/60 shadow-2xl z-50 flex flex-col transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : 'translate-x-full'}`}>
 
