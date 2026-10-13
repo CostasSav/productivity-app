@@ -5,3 +5,8 @@ dist/
 .DS_Store
 server/.env
 client/.env
+.env.*
+**/.env.*
+auth-secrets.env
+
+.vercel

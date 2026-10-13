@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "upload-db": "tsx src/upload-db.ts"
+    "upload-db": "tsx src/upload-db.ts",
+    "test": "tsx --test tests/auth.test.ts",
+    "auth:setup": "tsx scripts/setup-auth.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
@@ -13,11 +15,13 @@
     "dotenv": "^16.0.0",
     "express": "^4.21.0",
     "express-rate-limit": "^8.5.2",
+    "express-session": "^1.19.0",
     "helmet": "^8.2.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.0",
     "@types/express": "^5.0.0",
+    "@types/express-session": "^1.19.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.6.0"

@@ -3,30 +3,7 @@ import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, P
 interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
 interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
 
-const APP_TOKEN = import.meta.env.VITE_APP_TOKEN as string | undefined;
-
-// In production, the API lives on a different domain (e.g. Railway).
-// Locally this stays empty and the Vite dev proxy forwards /api to :3001.
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '';
-
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    // Keep personal API data out of the browser HTTP cache too.
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(APP_TOKEN ? { Authorization: `Bearer ${APP_TOKEN}` } : {}),
-      ...(options?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Request failed: ${res.status}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
+import { request } from './request';
 
 export const api = {
   sections: {

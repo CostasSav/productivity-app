@@ -49,7 +49,7 @@ assert.equal(routes.length, 1, 'Only the app shell navigation route is allowed')
 assert.equal(routes[0].handler, 'index.html');
 const allowlist = routes[0].options.allowlist;
 assert.ok(allowlist.some(rule => rule.test('/')));
-for (const url of ['/api', '/api/tasks', '/api/notes', '/other-page']) {
+for (const url of ['/api', '/api/tasks', '/api/notes', '/api/auth/session', '/api/auth/login', '/api/auth/logout', '/other-page']) {
   assert.ok(!allowlist.some(rule => rule.test(url)), `Unexpected shell fallback: ${url}`);
 }
 assert.equal(skippedWaiting, false, 'Updates must wait for user approval');

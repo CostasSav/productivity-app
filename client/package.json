@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "tsx --test tests/api.test.ts",
+    "check:auth": "node scripts/check-auth-build.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.4",

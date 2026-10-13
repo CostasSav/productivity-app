@@ -19,6 +19,7 @@ import { useNotes, useNote, useUpdateNote } from './hooks/useNotes';
 import { useTasksContext } from './context/TasksContext';
 import { useSections } from './hooks/useSections';
 import { useDarkMode } from './context/DarkModeContext';
+import { useAuth } from './context/AuthContext';
 import { useMobile } from './hooks/useMobile';
 import { api } from './api';
 import type { Note, Task } from './types';
@@ -67,6 +68,7 @@ function Icon({ d, d2, className = 'w-4 h-4 flex-shrink-0' }: { d: string; d2?: 
 // â"€â"€ App â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 export default function App() {
+  const { logout } = useAuth();
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem(WELCOME_KEY));
   const [view, setView] = useState<View>(() => readSessionView());
   const [collapsed, setCollapsed] = useState(false);
@@ -391,6 +393,11 @@ export default function App() {
 
         {/* Bottom controls */}
         <div className="mt-auto flex flex-col gap-1 pt-2">
+          <button onClick={() => void logout()} title="Sign out" aria-label="Sign out"
+            className={`flex items-center w-full rounded text-sm text-gray-500 hover:bg-gray-100 dark:text-zinc-400 dark:hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${collapsed ? 'justify-center py-2.5' : 'gap-2.5 px-3 py-2.5'}`}>
+            <Icon d="M9 5H5v14h4m5-14l7 7-7 7m7-7H9" />
+            {!collapsed && 'Sign out'}
+          </button>
           {navBtn('settings', 'Settings', <Icon d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" d2="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />)}
           <button
             onClick={toggle}
