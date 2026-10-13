@@ -17,8 +17,8 @@ export function createApiApp(config: AuthConfig, widgets: WidgetOptions = { conf
     next();
   });
   app.use(cors({ origin: config.origins, credentials: true }));
-  app.use(express.json({ limit: '1mb' }));
   app.use('/api/widgets', createWidgetRouter(widgets));
+  app.use(express.json({ limit: '1mb' }));
   const auth = createAuth(config);
   app.use('/api', auth.middleware);
   app.use('/api/auth', auth.router);

@@ -11,12 +11,13 @@ import { groceryRouter, groceryStaplesRouter } from './routes/grocery';
 import { sleepRouter, sleepSettingsRouter } from './routes/sleep';
 import { booksRouter, bookNotesRouter, bookQuotesRouter, bookLearningsRouter, bibliothecaSettingsRouter } from './routes/bibliotheca';
 import { db, prepareDatabase } from './db/database';
-import { readWidgetConfig } from './widgets/config';
+import { readWidgetConfig, readWidgetActionConfig } from './widgets/config';
 import { readAuthConfig } from './auth/config';
 import { createApiApp } from './app';
 
 // Validate authentication before any startup database work.
-const app = createApiApp(readAuthConfig(), { config: readWidgetConfig(), read: () => db.getWidgetData() });
+const app = createApiApp(readAuthConfig(), { config: readWidgetConfig(), read: () => db.getWidgetData(),
+  actionConfig: readWidgetActionConfig(), complete: (...args) => db.widgetCompletion(...args) });
 
 prepareDatabase();
 

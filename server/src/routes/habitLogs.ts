@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/database';
+import { completionError } from '../middleware/completionError';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const { habitId, completedAt, note } = req.body;
-  if (habitId == null) return res.status(400).json({ error: 'habitId is required' });
+  if (!Number.isSafeInteger(Number(habitId)) || Number(habitId) < 1) return res.status(400).json({ error: 'valid habitId is required' });
   const log = db.createHabitLog({
     habitId: Number(habitId),
     completedAt: completedAt != null ? String(completedAt) : new Date().toISOString(),
@@ -30,4 +31,5 @@ router.delete('/:id', (req, res) => {
   res.status(204).send();
 });
 
+router.use(completionError);
 export default router;

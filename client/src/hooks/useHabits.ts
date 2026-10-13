@@ -127,7 +127,7 @@ export function useLogHabit() {
       // Replace the temp entry (negative ID, same habitId) with the real one.
       queryClient.setQueryData<HabitLog[]>(LOGS_KEY, prev => {
         if (!prev) return [entry];
-        const withoutTemp = prev.filter(l => !(l.id < 0 && l.habitId === habitId));
+      const withoutTemp = prev.filter(l => l.id !== entry.id && !(l.id < 0 && l.habitId === habitId));
         return [...withoutTemp, entry];
       });
     },

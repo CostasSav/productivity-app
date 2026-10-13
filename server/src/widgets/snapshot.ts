@@ -32,6 +32,16 @@ function normalizeDate(value: unknown, format: Intl.DateTimeFormat): string | nu
   const milliseconds = Date.parse(value);
   return Number.isFinite(milliseconds) ? dateInZone(new Date(milliseconds), format) : null;
 }
+export function widgetCalendarDate(value: unknown, timeZone: string): string | null {
+  return normalizeDate(value, formatter(timeZone));
+}
+export function habitLogCalendarDate(value: unknown, timeZone: string): string | null {
+  // Existing browser backdating sends local noon without an offset.
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?$/.test(value)) {
+    return calendarDate(value.slice(0, 10)) ? value.slice(0, 10) : null;
+  }
+  return widgetCalendarDate(value, timeZone);
+}
 function cohort<T>(items: T[], completed: number): Cohort<T> {
   return { total: items.length, completed, remaining: items.length - completed,
     progress: items.length ? Math.round(completed / items.length * 10000) / 10000 : null,
@@ -53,7 +63,7 @@ export function buildWidgetSnapshot(data: WidgetData, timeZone: string, now = ne
   taskItems.sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done') || a.id - b.id);
   const dates = new Map<number, Set<string>>();
   for (const log of data.habitLogs) {
-    const date = normalizeDate(log.completedAt, format);
+    const date = habitLogCalendarDate(log.completedAt, timeZone);
     if (!date || date < monday || date > today) continue;
     if (!dates.has(log.habitId)) dates.set(log.habitId, new Set());
     dates.get(log.habitId)!.add(date);

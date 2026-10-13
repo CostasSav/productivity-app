@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/database';
+import { completionError } from '../middleware/completionError';
 import type { Priority, TaskStatus, RecurrenceType } from '../types';
 
 const router = Router();
@@ -106,4 +107,5 @@ router.delete('/:id/subtasks/:subId', (req, res) => {
   res.json({ task, nextTask: null });
 });
 
+router.use(completionError);
 export default router;

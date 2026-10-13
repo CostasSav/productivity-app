@@ -11,3 +11,10 @@ export function readWidgetConfig(env: NodeJS.ProcessEnv = process.env): WidgetCo
   try { new Intl.DateTimeFormat('en', { timeZone }).format(); } catch { return null; }
   return { digest: digest.toLowerCase(), expiresAt, timeZone };
 }
+
+export function readWidgetActionConfig(env: NodeJS.ProcessEnv = process.env): WidgetConfig | null {
+  const config = readWidgetConfig({ ...env, WIDGET_READ_TOKEN_SHA256: env.WIDGET_ACTION_TOKEN_SHA256,
+    WIDGET_READ_TOKEN_EXPIRES_AT: env.WIDGET_ACTION_TOKEN_EXPIRES_AT });
+  // A provisioning mistake must never promote the read credential to write access.
+  return config && config.digest !== env.WIDGET_READ_TOKEN_SHA256?.toLowerCase() ? config : null;
+}

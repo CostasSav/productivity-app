@@ -18,6 +18,8 @@ export interface Section {
 }
 
 export interface Task {
+  // Absent means legacy/ambiguous; never infer an unissued recurrence from status.
+  recurrenceIssued?: boolean;
   id: number;
   title: string;
   description: string | null;

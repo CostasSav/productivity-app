@@ -1,5 +1,7 @@
 import path from 'path';
 import { DatabaseError, JsonStore } from './jsonStore';
+import { CompletionError, calendarDay, habitZone, logDay, setHabitState, updateTaskState } from './completion';
+import { buildWidgetSnapshot, widgetCalendarDate } from '../widgets/snapshot';
 import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory, SleepEntry, SleepSettings, SleepStats, Book, BookNote, BookQuote, BookLearning, BibliothecaSettings, BookStats, BookWithCounts, BookStatus } from '../types';
 import { GROCERY_CATEGORIES } from '../types';
 
@@ -370,40 +372,34 @@ export const db = {
   createTask(fields: Omit<Task, 'id' | 'created_at' | 'updated_at'>): Task {
     const data = load();
     data._taskSeq += 1;
-    const task: Task = { ...fields, id: data._taskSeq, created_at: now(), updated_at: now() };
+    const task: Task = { ...fields, recurrenceIssued: false, id: data._taskSeq, created_at: now(), updated_at: now() };
     data.tasks.push(task);
     save(data);
     return task;
   },
   updateTask(id: number, fields: Partial<Omit<Task, 'id' | 'created_at'>>): { task: Task; nextTask: Task | null } | undefined {
     const data = load();
-    const idx = data.tasks.findIndex(t => t.id === id);
-    if (idx === -1) return undefined;
-    // Auto-manage pinnedAt when pinnedToday changes
-    const derived: Partial<Task> = {};
-    if (fields.pinnedToday === true) derived.pinnedAt = now();
-    else if (fields.pinnedToday === false) derived.pinnedAt = null;
-    // Auto-unpin when marked done
-    if (fields.status === 'done') { derived.pinnedToday = false; derived.pinnedAt = null; }
-    data.tasks[idx] = { ...data.tasks[idx], ...fields, ...derived, updated_at: now() };
-    const updated = data.tasks[idx];
-    let nextTask: Task | null = null;
-    if (fields.status === 'done' && updated.recurrence && updated.deadline) {
-      data._taskSeq += 1;
-      nextTask = {
-        ...updated,
-        id: data._taskSeq,
-        status: 'todo',
-        pinnedToday: false,
-        pinnedAt: null,
-        deadline: nextDeadline(updated.deadline, updated.recurrence),
-        created_at: now(),
-        updated_at: now(),
-      };
-      data.tasks.push(nextTask);
-    }
-    save(data);
-    return { task: updated, nextTask };
+    const result = updateTaskState(data, id, fields, nextDeadline);
+    if (!result) return undefined;
+    if (result.changed) save(data);
+    return { task: result.task, nextTask: result.nextTask };
+  },
+  widgetCompletion(kind: 'tasks' | 'habits', id: number, date: string, completed: boolean, zone: string, instant = new Date(), expectedUpdatedAt?: string) {
+    if (!calendarDay(date)) throw new CompletionError(400, 'INVALID_DATE');
+    if (widgetCalendarDate(instant.toISOString(), zone) !== date) throw new CompletionError(409, 'STALE_DAY');
+    // Entire validation/read/modify/save is synchronous, with no await or stale cached state.
+    const data = load();
+    let changed: boolean;
+    if (kind === 'tasks') {
+      const task = data.tasks.find(t => t.id === id);
+      if (!task) throw new CompletionError(404, 'TASK_UNAVAILABLE');
+      if (buildWidgetSnapshot({ tasks: [task], habits: [], habitLogs: [] }, zone, instant).tasks.total !== 1) throw new CompletionError(409, 'TASK_NOT_ELIGIBLE');
+      if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== task.updated_at) throw new CompletionError(409, 'STALE_TASK');
+      const result = updateTaskState(data, id, { status: completed ? 'done' : 'todo' }, nextDeadline)!;
+      changed = result.changed;
+    } else changed = setHabitState(data, id, date, completed, zone, null, instant.toISOString()).changed;
+    if (changed) save(data);
+    return { id, date, completed, outcome: changed ? 'applied' : 'already-applied' };
   },
   unpinStaleTasks(): void {
     const data = load();
@@ -583,18 +579,22 @@ export const db = {
   },
   createHabitLog(fields: Omit<HabitLog, 'id'>): HabitLog {
     const data = load();
-    data._habitLogSeq += 1;
-    const log: HabitLog = { ...fields, id: data._habitLogSeq };
-    data.habitLogs.push(log);
-    save(data);
-    return log;
+    const zone = habitZone();
+    const date = logDay(fields.completedAt, zone);
+    if (!date || date > widgetCalendarDate(now(), zone)!) throw new CompletionError(400, 'INVALID_DATE');
+    const result = setHabitState(data, fields.habitId, date, true, zone, fields.note, fields.completedAt);
+    if (result.changed) save(data);
+    return result.log!;
   },
   deleteHabitLog(id: number): boolean {
     const data = load();
-    const before = data.habitLogs.length;
-    data.habitLogs = data.habitLogs.filter(l => l.id !== id);
-    if (data.habitLogs.length === before) return false;
-    save(data);
+    const entry = data.habitLogs.find(l => l.id === id);
+    if (!entry) return false;
+    const zone = habitZone();
+    const date = logDay(entry.completedAt, zone);
+    if (!date) throw new CompletionError(409, 'AMBIGUOUS_HABIT_LOGS');
+    const result = setHabitState(data, entry.habitId, date, false, zone);
+    if (result.changed) save(data);
     return true;
   },
 
