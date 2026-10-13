@@ -4,9 +4,10 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import type { AuthConfig } from './auth/config';
 import { createAuth } from './middleware/auth';
+import { createWidgetRouter, type WidgetOptions } from './widgets/router';
 
 // No database imports or startup side effects: tests use synthetic route handlers.
-export function createApiApp(config: AuthConfig) {
+export function createApiApp(config: AuthConfig, widgets: WidgetOptions = { config: null, read: () => { throw new Error(); } }) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -17,6 +18,7 @@ export function createApiApp(config: AuthConfig) {
   });
   app.use(cors({ origin: config.origins, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
+  app.use('/api/widgets', createWidgetRouter(widgets));
   const auth = createAuth(config);
   app.use('/api', auth.middleware);
   app.use('/api/auth', auth.router);

@@ -1,6 +1,4 @@
 import 'dotenv/config';
-import path from 'path';
-import fs from 'fs';
 import tasksRouter from './routes/tasks';
 import notesRouter from './routes/notes';
 import aiRouter from './routes/ai';
@@ -12,17 +10,15 @@ import { gratitudeRouter, gratitudeSettingsRouter } from './routes/gratitude';
 import { groceryRouter, groceryStaplesRouter } from './routes/grocery';
 import { sleepRouter, sleepSettingsRouter } from './routes/sleep';
 import { booksRouter, bookNotesRouter, bookQuotesRouter, bookLearningsRouter, bibliothecaSettingsRouter } from './routes/bibliotheca';
-import { db, flushMigrations } from './db/database';
+import { db, prepareDatabase } from './db/database';
+import { readWidgetConfig } from './widgets/config';
 import { readAuthConfig } from './auth/config';
 import { createApiApp } from './app';
 
 // Validate authentication before any startup database work.
-const app = createApiApp(readAuthConfig());
+const app = createApiApp(readAuthConfig(), { config: readWidgetConfig(), read: () => db.getWidgetData() });
 
-const dataDir = process.env.DATA_DIR ?? path.join(__dirname, '../data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-flushMigrations();
-db.unpinStaleTasks();
+prepareDatabase();
 
 const PORT = process.env.PORT ?? 3001;
 

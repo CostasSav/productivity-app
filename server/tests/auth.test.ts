@@ -83,6 +83,8 @@ test('correct login rotates session/CSRF, secure cookie, persistence, logout rev
   await f.initialize();
   const oldCookie = f.cookie(), oldCsrf = f.csrf();
   assert.equal((await f.login()).authenticated, true);
+  // A valid browser session cannot substitute for the separate widget bearer.
+  assert.equal((await f.call('/api/widgets/today')).status, 401);
   assert.notEqual(f.cookie(), oldCookie);
   assert.notEqual(f.csrf(), oldCsrf);
   assert.equal((await f.call('/api/tasks', 'GET', undefined, { Cookie: oldCookie })).status, 401);

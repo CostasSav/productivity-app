@@ -1,5 +1,5 @@
-import fs from 'fs';
 import path from 'path';
+import { DatabaseError, JsonStore } from './jsonStore';
 import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory, SleepEntry, SleepSettings, SleepStats, Book, BookNote, BookQuote, BookLearning, BibliothecaSettings, BookStats, BookWithCounts, BookStatus } from '../types';
 import { GROCERY_CATEGORIES } from '../types';
 
@@ -63,9 +63,32 @@ const EMPTY: DbData = {
   _bookSeq: 0, _bookNoteSeq: 0, _bookQuoteSeq: 0, _bookLearningSeq: 0,
 };
 
+function validateDatabase(value: unknown): asserts value is DbData {
+  const invalid = () => { throw new DatabaseError('FORMAT', 'Invalid database structure. Original file preserved; no automatic repair performed.'); };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid();
+  const data = value as Record<string, unknown>;
+  // Keep historical optional collections compatible with existing backfills.
+  // Reject present-but-invalid values instead of silently resetting them.
+  for (const [key, empty] of Object.entries(EMPTY)) {
+    const field = data[key];
+    if (field === undefined && !['tasks', 'notes', '_taskSeq', '_noteSeq'].includes(key)) continue;
+    if (Array.isArray(empty)) {
+      if (!Array.isArray(field) || field.some(item => !item || typeof item !== 'object' || Array.isArray(item))) invalid();
+    } else if (typeof empty === 'number') {
+      if (typeof field !== 'number' || !Number.isSafeInteger(field) || field < 0) invalid();
+    } else if (!field || typeof field !== 'object' || Array.isArray(field)) invalid();
+  }
+}
+
+const storage = new JsonStore<DbData>(DB_PATH, validateDatabase);
+
+/** Only the explicit db:init command calls this; reads/startup never initialize. */
+export function initializeDatabase(): void {
+  storage.initialize(structuredClone(EMPTY));
+}
+
 function load(): DbData {
-  try {
-    const raw = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+    const raw = storage.read();
     if (!raw.sections) raw.sections = [];
     if (raw._sectionSeq === undefined) raw._sectionSeq = 0;
     if (!raw.pomodoroSessions) raw.pomodoroSessions = [];
@@ -123,13 +146,10 @@ function load(): DbData {
       raw.tasks = (raw.tasks as any[]).map((t: any) => ({ subtasks: [], pinnedToday: false, pinnedAt: null, ...t }));
     }
     return raw;
-  } catch {
-    return { ...EMPTY };
-  }
 }
 
 function save(data: DbData) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  storage.write(data);
 }
 
 function now() {
@@ -284,7 +304,18 @@ export function flushMigrations() {
   save(load());
 }
 
+/** Startup stops immediately on any read/migration/write failure. */
+export function prepareDatabase() {
+  flushMigrations();
+  db.unpinStaleTasks();
+}
+
 export const db = {
+  // One consistent read; no migration flush, pin cleanup or persistence.
+  getWidgetData(): Pick<DbData, 'tasks' | 'habits' | 'habitLogs'> {
+    const { tasks, habits, habitLogs } = load();
+    return { tasks, habits, habitLogs };
+  },
   // ── Sections ────────────────────────────────────────
   getSections(): Section[] {
     return load().sections.sort((a, b) => a.created_at < b.created_at ? -1 : 1);

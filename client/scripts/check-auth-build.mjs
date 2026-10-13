@@ -5,7 +5,7 @@ import { parse } from 'dotenv';
 
 // Report only PASS/FAIL, never matched strings, snippets, or credential values.
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const keys = ['APP_TOKEN', 'VITE_APP_TOKEN', 'AUTH_PASSWORD_HASH', 'SESSION_SECRET', 'ANTHROPIC_API_KEY'];
+const keys = ['APP_TOKEN', 'VITE_APP_TOKEN', 'AUTH_PASSWORD_HASH', 'SESSION_SECRET', 'ANTHROPIC_API_KEY', 'WIDGET_READ_TOKEN_SHA256'];
 const values = keys.map(key => process.env[key]).filter(Boolean);
 for (const directory of [root, path.join(root, 'client'), path.join(root, 'server')]) {
   for (const name of fs.readdirSync(directory)) {
@@ -24,7 +24,7 @@ function inspect(directory) {
     else {
       files++;
       const content = fs.readFileSync(filename).toString('utf8');
-      if (values.some(value => content.includes(value)) || /VITE_APP_TOKEN|VITE_API_URL/.test(content)) {
+      if (values.some(value => content.includes(value)) || /VITE_APP_TOKEN|VITE_API_URL|WIDGET_READ_TOKEN/.test(content)) {
         throw new Error('FAIL: frontend artifacts contain a forbidden credential or obsolete authentication configuration');
       }
     }

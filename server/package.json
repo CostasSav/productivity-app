@@ -6,14 +6,16 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "upload-db": "tsx src/upload-db.ts",
-    "test": "tsx --test tests/auth.test.ts",
-    "auth:setup": "tsx scripts/setup-auth.ts"
+    "test": "tsx --test tests/auth.test.ts tests/database.test.ts tests/widgets.test.ts",
+    "widget:token": "tsx scripts/generate-widget-token.ts",
+    "auth:setup": "tsx scripts/setup-auth.ts",
+    "db:init": "tsx scripts/init-database.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
-    "express": "^4.21.0",
+    "express": "^4.22.3",
     "express-rate-limit": "^8.5.2",
     "express-session": "^1.19.0",
     "helmet": "^8.2.0"
