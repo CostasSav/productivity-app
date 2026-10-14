@@ -15,14 +15,15 @@ function snapshot(total = 5) {
     habits: { ...cohort, items: items.map((t, i) => ({ id: t.id, name: 'Habit ' + i, icon: i === 1 ? '🌿' : 'unusual_icon', color: '#0D9488', frequency: 'weekly_count', completedToday: i === 0, weekly: { completed: 2, target: 3, remaining: 1 } })) } };
 }
 async function run(name, options = {}) {
-  const text = [], alerts = [], requests = [], previews = [], bars = [];
+  const text = [], alerts = [], requests = [], previews = [], bars = [], stacks = [];
   const store = new Map(options.missing ? [] : [[key, synthetic]]);
+  if (options.action) store.set('myworkspace.widget.action.v1', 'y'.repeat(43));
   const choices = [...(options.choices || [])];
   let widget, completed = false;
   class Element {
     addText(value) { assert.equal(typeof value, 'string'); text.push(value); return {}; }
     addDate(value) { assert.ok(Number.isFinite(value.getTime())); return { applyRelativeStyle() {} }; }
-    addStack() { return new Element(); }
+    addStack() { const stack = new Element(); stacks.push(stack); return stack; }
     addImage() { return {}; }
     addSpacer() {}
     centerAlignContent() {}
@@ -69,10 +70,28 @@ async function run(name, options = {}) {
   await vm.runInNewContext('(async () => {\n' + code + '\n})()', context, { timeout: 2000 });
   assert.ok(completed);
   assert.ok(!JSON.stringify({ text, alerts }).includes(synthetic));
-  return { text, alerts, requests, previews, store, widget, bars };
+  assert.ok(!JSON.stringify(stacks).includes(synthetic));
+  return { text, alerts, requests, previews, store, widget, bars, stacks };
 }
 
 for (const name of ['MyWorkspaceTasks', 'MyWorkspaceHabits']) {
+  test(name + ': row links contain only explicit non-secret actions; read-only and small remain unchanged', async () => {
+    const data = snapshot(2);
+    const r = await run(name, { data, action: true, website: 'https://workspace.example/' });
+    const urls = r.stacks.filter(s => s.url).map(s => new URL(s.url));
+    assert.equal(urls.length, 2); assert.equal(r.widget.url, 'https://workspace.example/');
+    for (const url of urls) {
+      assert.equal(url.protocol, 'scriptable:'); assert.equal(url.pathname, '/run');
+      assert.equal(url.searchParams.get('scriptName'), 'MyWorkspaceAction');
+      assert.equal(url.searchParams.get('kind'), name.endsWith('Tasks') ? 'tasks' : 'habits');
+      assert.equal(url.searchParams.get('date'), data.date);
+      assert.deepEqual([...url.searchParams.keys()], ['scriptName', 'kind', 'id', 'date', 'expected', 'completed']);
+      const id = Number(url.searchParams.get('id'));
+      assert.equal(url.searchParams.get('completed'), String(id !== 1));
+    }
+    assert.equal((await run(name)).stacks.filter(s => s.url).length, 0);
+    assert.equal((await run(name, { action: true, family: 'small' })).stacks.filter(s => s.url).length, 0);
+  });
   test(name + ': medium full totals, incomplete first, three rows and overflow', async () => {
     const r = await run(name);
     assert.ok(r.text.includes('1 / 5 completed'));
@@ -167,4 +186,28 @@ test('setup removal requires confirmation; cancellation preserves credential', a
   const removed = await run('MyWorkspaceSetup', { app: true, choices: [1, 0] });
   assert.equal(removed.store.has(key), false);
   assert.equal(removed.requests.length, 0);
+});
+
+test('setup stores separate action token only after confirmation and without a production request', async () => {
+  const token = 'y'.repeat(43);
+  const r = await run('MyWorkspaceSetup', { app: true, input: token, choices: [2, 0, 0] });
+  assert.equal(r.store.get(key), synthetic);
+  assert.equal(r.store.get('myworkspace.widget.action.v1'), token);
+  assert.equal(r.requests.length, 0); assert.ok(r.alerts[1].secure);
+  assert.ok(!JSON.stringify(r.alerts).includes(token));
+  const cancelled = await run('MyWorkspaceSetup', { app: true, input: token, choices: [2, 0, -1] });
+  assert.equal(cancelled.store.has('myworkspace.widget.action.v1'), false);
+});
+test('setup refuses credential reuse in either direction', async () => {
+  const r = await run('MyWorkspaceSetup', { app: true, choices: [2, 0] });
+  assert.equal(r.store.has('myworkspace.widget.action.v1'), false);
+  const read = await run('MyWorkspaceSetup', { app: true, action: true, input: 'y'.repeat(43), choices: [0, 0] });
+  assert.equal(read.store.get(key), synthetic); assert.equal(read.requests.length, 0);
+});
+test('removing action token requires confirmation and preserves read access', async () => {
+  const cancelled = await run('MyWorkspaceSetup', { app: true, action: true, choices: [3, -1] });
+  assert.equal(cancelled.store.has('myworkspace.widget.action.v1'), true);
+  const removed = await run('MyWorkspaceSetup', { app: true, action: true, choices: [3, 0] });
+  assert.equal(removed.store.has('myworkspace.widget.action.v1'), false);
+  assert.equal(removed.store.get(key), synthetic); assert.equal(removed.requests.length, 0);
 });

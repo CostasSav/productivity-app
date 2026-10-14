@@ -1,6 +1,7 @@
 // Run interactively in Scriptable. Never paste credentials into this file.
 const ENDPOINT = "https://productivity-server-production-3494.up.railway.app/api/widgets/today";
 const TOKEN_KEY = "myworkspace.widget.read.v1";
+const ACTION_KEY = "myworkspace.widget.action.v1";
 
 async function fetchSnapshot(token) {
   const request = new Request(ENDPOINT);
@@ -68,34 +69,61 @@ async function main() {
   if (!config.runsInApp) return; // No credential dialogs in a widget or automation.
   const menu = new Alert();
   menu.title = "My Workspace";
-  menu.message = "Manage the private read-only widget credential on this iPhone.";
+  menu.message = "Read and action credentials are separate and stay in this iPhone's Keychain.";
   menu.addAction("Save or replace credential");
   menu.addDestructiveAction("Remove saved credential");
+  menu.addAction("Save or replace action token");
+  menu.addDestructiveAction("Remove action token");
   menu.addCancelAction("Cancel");
   const choice = await menu.presentAlert();
-  if (choice === 1) {
+  const action = choice === 2 || choice === 3;
+  const selectedKey = action ? ACTION_KEY : TOKEN_KEY;
+  if (choice === 1 || choice === 3) {
     const confirm = new Alert();
     confirm.title = "Remove credential?";
-    confirm.message = "Widgets will stop refreshing. This removes the local credential only; it does not revoke it on Railway.";
+    confirm.message = action ? "Completion taps will be disabled. Read-only widgets keep working. This does not revoke the token on Railway." :
+      "Widgets will stop refreshing. This removes the local credential only; it does not revoke it on Railway.";
     confirm.addDestructiveAction("Remove");
     confirm.addCancelAction("Cancel");
     if (await confirm.presentAlert() === 0) {
-      if (Keychain.contains(TOKEN_KEY)) Keychain.remove(TOKEN_KEY);
-      await message("Credential removed", "Run setup again to reconnect. iOS may retain the last rendered widget until its next refresh.");
+      if (Keychain.contains(selectedKey)) Keychain.remove(selectedKey);
+      await message(action ? "Action token removed" : "Credential removed", action ?
+        "Read-only widgets keep working. Run both widget scripts to remove completion links; iOS may retain the old image until refresh." :
+        "Run setup again to reconnect. iOS may retain the last rendered widget until its next refresh.");
     }
     return;
   }
-  if (choice !== 0) return;
+  if (choice !== 0 && choice !== 2) return;
   const input = new Alert();
-  input.title = "Widget credential";
-  input.message = "Paste the existing raw widget token from your password manager. It will be validated before replacing the saved credential.";
+  input.title = action ? "Separate action token" : "Widget credential";
+  input.message = action ? "Paste the separately provisioned raw action token. Saving does not validate it with Railway or change any task. Your read token is preserved." :
+    "Paste the existing raw widget token from your password manager. It will be validated before replacing the saved credential.";
   input.addSecureTextField("Widget token");
-  input.addAction("Validate and save");
+  input.addAction(action ? "Continue" : "Validate and save");
   input.addCancelAction("Cancel");
   if (await input.presentAlert() !== 0) return;
   let token = input.textFieldValue(0).trim();
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
     await message("Invalid format", "Enter the raw 43-character widget token, not its digest or a Bearer prefix.");
+    return;
+  }
+  const otherKey = action ? TOKEN_KEY : ACTION_KEY;
+  if (Keychain.contains(otherKey) && Keychain.get(otherKey) === token) {
+    token = "";
+    await message("Separate tokens required", "Read and action tokens must be different. Nothing was saved.");
+    return;
+  }
+  if (action) {
+    const confirm = new Alert();
+    confirm.title = "Enable completion taps?";
+    confirm.message = "Store this action token separately in Keychain? It must already be provisioned on Railway. It cannot be validated without an action, so its validity will be checked on your first confirmed completion. No changes are sent now.";
+    confirm.addAction("Save action token");
+    confirm.addCancelAction("Cancel");
+    if (await confirm.presentAlert() === 0) {
+      Keychain.set(ACTION_KEY, token);
+      await message("Action token saved", "Read token unchanged. Run both widget scripts again to enable row taps. Each change requires confirmation.");
+    }
+    token = "";
     return;
   }
   const result = await fetchSnapshot(token);

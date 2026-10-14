@@ -6,6 +6,13 @@ const KIND = "tasks";
 const WEBSITE_URL = "";
 const ENDPOINT = "https://productivity-server-production-3494.up.railway.app/api/widgets/today";
 const TOKEN_KEY = "myworkspace.widget.read.v1";
+const ACTION_KEY = "myworkspace.widget.action.v1";
+
+function actionURL(item, date) {
+  const expected = item.status;
+  return "scriptable:///run?scriptName=MyWorkspaceAction&kind=" + KIND + "&id=" + item.id +
+    "&date=" + encodeURIComponent(date) + "&expected=" + expected + "&completed=" + (expected !== "done");
+}
 
 async function fetchSnapshot(token) {
   const request = new Request(ENDPOINT);
@@ -109,7 +116,7 @@ function habitIcon(row, habit) {
   row.addSpacer(5);
 }
 
-function render(result, family) {
+function render(result, family, actionsEnabled) {
   const small = family === "small";
   const large = family === "large";
   const widget = new ListWidget();
@@ -158,6 +165,7 @@ function render(result, family) {
     visible.forEach((item, index) => {
       if (index) widget.addSpacer(large ? 12 : 3);
       const row = widget.addStack();
+      if (actionsEnabled) row.url = actionURL(item, data.date);
       row.centerAlignContent();
       label(row, done(item) ? "✓" : "○", 13, done(item) ? ACCENT : MUTED, true);
       row.addSpacer(6);
@@ -202,7 +210,9 @@ async function main() {
     }
   } catch (_) { result = { error: "Secure storage unavailable. Open Scriptable and try again." }; }
   const family = config.widgetFamily || "medium";
-  const widget = render(result, family);
+  let actionsEnabled = false;
+  try { actionsEnabled = Keychain.contains(ACTION_KEY); } catch (_) {}
+  const widget = render(result, family, actionsEnabled);
   Script.setWidget(widget);
   if (config.runsInApp) {
     if (family === "small") await widget.presentSmall();
