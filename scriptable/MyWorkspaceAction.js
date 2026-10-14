@@ -28,26 +28,41 @@ function statusMessage(status, writing) {
   if (status === 409) return "Completion conflict. Refresh the widget and review this item in My Workspace. No automatic retry.";
   if (status === 429) return "Request limit reached. Wait before refreshing or trying again.";
   if (status >= 300 && status < 400) return "Redirect blocked. Check the API address.";
-  if (status === 400) return "Action request rejected. Update your Scriptable scripts.";
+  if (status === 400) return "API rejected the request (HTTP 400). No change accepted. Check the action request format.";
   if (writing) return "The change could not be confirmed. It may have reached the server. Refresh the widget before trying again; no automatic retry.";
   return "Cannot fetch current state. Check your connection and try later.";
+}
+function errorTitle(status) {
+  if (status === 401) return "Authentication failed";
+  if (status === 403) return "Access denied";
+  if (status === 400) return "Request rejected";
+  if (status === 409) return "Completion conflict";
+  if (status === 404) return "Item unavailable";
+  if (status === 429) return "Request limit reached";
+  if (status >= 500) return "Server error";
+  return "Not confirmed";
 }
 async function requestJSON(url, token, method, body) {
   const request = new Request(url);
   request.method = method;
-  request.headers = { Authorization: "Bearer " + token, Accept: "application/json", "Cache-Control": "no-store" };
+  const headers = { Authorization: "Bearer " + token, Accept: "application/json", "Cache-Control": "no-store" };
   if (body !== undefined) {
-    request.headers["Content-Type"] = "application/json";
+    headers["Content-Type"] = "application/json";
     request.body = JSON.stringify(body);
   }
+  // Assign once: mutating a dictionary returned by a native property may only change a copy.
+  request.headers = headers;
   request.timeoutInterval = 12;
   request.allowInsecureRequest = false;
   request.onRedirect = () => null;
   let text;
   try { text = await request.loadString(); }
-  catch (_) { return { error: statusMessage(request.response && request.response.statusCode, method !== "GET") }; }
+  catch (_) {
+    const status = request.response && request.response.statusCode;
+    return { title: errorTitle(status), error: statusMessage(status, method !== "GET") };
+  }
   const status = request.response && request.response.statusCode;
-  if (status !== 200) return { error: statusMessage(status, method !== "GET") };
+  if (status !== 200) return { title: errorTitle(status), error: statusMessage(status, method !== "GET") };
   try {
     if (typeof text !== "string" || text.length > (method === "GET" ? 50000 : 2000)) throw new Error();
     return { data: JSON.parse(text) };
@@ -93,7 +108,7 @@ async function message(title, body) {
 async function main() {
   if (!config.runsInApp) return; // Never mutate from a background widget or automation.
   const action = parameters(args.queryParameters);
-  if (!action) { await message("Open a widget row", "Run this script by tapping a task or habit in a medium or large widget."); return; }
+  if (!action) { await message("Invalid action link", "Missing or invalid widget parameters. Tap a row in an updated medium or large widget; no change sent."); return; }
   if (!Keychain.contains(READ_KEY) || !Keychain.contains(ACTION_KEY)) {
     await message("Setup required", "Use MyWorkspaceSetup to save separate read and action tokens."); return;
   }
@@ -103,24 +118,24 @@ async function main() {
   }
   const first = await requestJSON(BASE + "/today", read, "GET");
   const checked = first.error ? first : checkState(first.data, action);
-  if (checked.error) { await message("Not applied", checked.error); return; }
+  if (checked.error) { await message(checked.title || "Not applied", checked.error); return; }
   const confirm = new Alert();
   confirm.title = action.completed ? "Mark complete?" : "Mark incomplete?";
   const title = action.kind === "tasks" ? checked.item.title : checked.item.name;
   confirm.message = title.replace(/[\r\n\t]/g, " ").slice(0, 160) + "\n" + action.date +
     (action.completed ? "\nApply this completion?" : "\nUndo this completion?");
   confirm.addAction(action.completed ? "Complete" : "Mark incomplete"); confirm.addCancelAction("Cancel");
-  if (await confirm.presentAlert() !== 0) return;
+  if (await confirm.presentAlert() !== 0) { await message("Cancelled", "No change sent."); return; }
   // Refresh again after the user has spent time in the confirmation dialog.
   const second = await requestJSON(BASE + "/today", read, "GET");
   const rechecked = second.error ? second : checkState(second.data, action);
-  if (rechecked.error) { await message("Not applied", rechecked.error); return; }
+  if (rechecked.error) { await message(rechecked.title || "Not applied", rechecked.error); return; }
   if (first.data.timeZone !== second.data.timeZone || JSON.stringify(checked.item) !== JSON.stringify(rechecked.item)) {
     await message("Not applied", "This item changed during confirmation. Refresh the widget and review it again."); return;
   }
   const result = await requestJSON(BASE + "/" + action.kind + "/" + action.id + "/completion", token,
     action.kind === "tasks" ? "PATCH" : "PUT", { date: action.date, completed: action.completed });
-  if (result.error) { await message("Not confirmed", result.error); return; }
+  if (result.error) { await message(result.title || "Not confirmed", result.error); return; }
   const data = result.data;
   if (!data || data.id !== action.id || data.date !== action.date || data.completed !== action.completed ||
       !["applied", "already-applied"].includes(data.outcome)) {

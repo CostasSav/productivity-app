@@ -22,12 +22,21 @@ async function run(options = {}) {
   let get = 0, complete = false;
   class Request {
     constructor(url) { assert.ok(url.startsWith(base)); assert.ok(!url.includes(read)); assert.ok(!url.includes(action)); this.url = url; requests.push(this); }
+    // Native Scriptable properties cross a bridge: reading a dictionary can return a copy.
+    // A plain JS object mock hid nested mutations that never reach the Request setter.
+    set headers(value) { this.savedHeaders = { ...value }; }
+    get headers() { return { ...this.savedHeaders }; }
     async loadString() {
       assert.equal(this.allowInsecureRequest, false); assert.equal(this.onRedirect({ url: 'https://bad.test' }), null);
       assert.equal(this.timeoutInterval, 12); assert.equal(this.headers['Cache-Control'], 'no-store');
       const writing = this.method !== 'GET';
       assert.equal(this.headers.Authorization, 'Bearer ' + (writing ? action : read));
       if (writing) {
+        assert.equal(alerts[0].title, options.query?.completed === 'false' ? 'Mark incomplete?' : 'Mark complete?');
+        if (this.headers['Content-Type'] !== 'application/json') {
+          this.response = { statusCode: 400 };
+          return JSON.stringify({ error: 'INVALID_PAYLOAD' });
+        }
         assert.equal(this.headers['Content-Type'], 'application/json');
         assert.deepEqual(Object.keys(JSON.parse(this.body)).sort(), ['completed', 'date']);
         if (options.networkWrite) throw new Error('private ' + action);
@@ -70,10 +79,68 @@ for (const kind of ['tasks', 'habits']) for (const completed of [true, false]) {
     assert.deepEqual(JSON.parse(r.writes[0].body), { date: data.date, completed });
     assert.match(r.alerts[0].title, completed ? /complete\?/ : /incomplete/);
     assert.match(r.alerts.at(-1).message, /iOS controls/);
+    assert.equal(r.alerts.at(-1).title, 'Saved');
   });
 }
 test('cancelling confirmation sends no write or second read', async () => {
   const r = await run({ choices: [-1] }); assert.equal(r.requests.length, 1); assert.equal(r.writes.length, 0);
+  assert.equal(r.alerts.at(-1).title, 'Cancelled');
+});
+
+async function widgetQuery(kind, data) {
+  const stacks = [];
+  class Element {
+    addText() { return {}; } addImage() { return {}; } addSpacer() {} centerAlignContent() {} setPadding() {}
+    addDate() { return { applyRelativeStyle() {} }; }
+    addStack() { const value = new Element(); stacks.push(value); return value; }
+  }
+  class Request {
+    constructor(url) { assert.equal(url, base + '/today'); }
+    async loadString() { this.response = { statusCode: 200 }; return JSON.stringify(data); }
+  }
+  let completed = false;
+  const context = { config: { runsInApp: false, widgetFamily: 'medium' },
+    Keychain: { contains: () => true, get: () => read }, Request, ListWidget: Element,
+    Color: class {}, LinearGradient: class {}, Font: { systemFont() {}, semiboldSystemFont() {} },
+    DrawContext: class { setFillColor() {} fillRect() {} getImage() { return {}; } }, Size: class {}, Rect: class {},
+    SFSymbol: { named() { return null; } }, Script: { setWidget() {}, complete() { completed = true; } } };
+  const source = fs.readFileSync(new URL('../MyWorkspace' + (kind === 'tasks' ? 'Tasks' : 'Habits') + '.js', import.meta.url), 'utf8');
+  await vm.runInNewContext('(async () => {\n' + source + '\n})()', context, { timeout: 2000 });
+  assert.ok(completed);
+  const urls = stacks.filter(s => s.url).map(s => s.url);
+  assert.equal(urls.length, 1);
+  assert.ok(!urls[0].includes(read)); assert.ok(!urls[0].includes(action));
+  const url = new URL(urls[0]);
+  assert.equal(url.protocol, 'scriptable:'); assert.equal(url.pathname, '/run');
+  return Object.fromEntries(url.searchParams);
+}
+for (const kind of ['tasks', 'habits']) for (const completed of [true, false]) {
+  test(`actual ${kind} widget URL reaches actual handler for desired ${completed}`, async () => {
+    const data = snapshot();
+    if (!completed) {
+      data.tasks.items[0].status = 'done'; data.habits.items[0].completedToday = true;
+      for (const group of [data.tasks, data.habits]) { group.completed = 1; group.remaining = 0; group.progress = 1; }
+    }
+    const parameters = await widgetQuery(kind, data);
+    const r = await run({ query: parameters, snapshot: data });
+    assert.equal(r.writes.length, 1); assert.equal(r.alerts.at(-1).title, 'Saved');
+    assert.equal(JSON.parse(r.writes[0].body).completed, completed);
+  });
+}
+test('actual widget URLs: cancel, malformed/missing parameters and stale state cannot write', async () => {
+  for (const kind of ['tasks', 'habits']) {
+    const parameters = await widgetQuery(kind, snapshot());
+    const cancelled = await run({ query: parameters, choices: [-1] });
+    assert.equal(cancelled.writes.length, 0);
+    assert.equal(cancelled.alerts.at(-1).title, 'Cancelled');
+    for (const change of [p => { p.id = 'invalid'; }, p => { delete p.date; }]) {
+      const p = { ...parameters }; change(p);
+      const invalid = await run({ query: p });
+      assert.equal(invalid.requests.length, 0); assert.equal(invalid.alerts.at(-1).title, 'Invalid action link');
+    }
+    const stale = snapshot(); stale.date = '2026-10-15';
+    assert.equal((await run({ query: parameters, snapshot: stale })).writes.length, 0);
+  }
 });
 test('background, missing credentials and reused tokens cannot send actions', async () => {
   for (const options of [{ app: false }, { missing: 'myworkspace.widget.read.v1' }, { missing: 'myworkspace.widget.action.v1' }, { sameToken: true }]) {
@@ -108,8 +175,10 @@ test('already-applied result is clear and never retried', async () => {
   const r = await run({ outcome: 'already-applied' }); assert.equal(r.writes.length, 1); assert.equal(r.alerts.at(-1).title, 'Already applied');
 });
 test('HTTP auth, disabled/expired token, conflicts, limits, service errors and redirects are sanitized', async () => {
+  const titles = { 400: 'Request rejected', 401: 'Authentication failed', 403: 'Access denied', 404: 'Item unavailable',
+    409: 'Completion conflict', 429: 'Request limit reached', 503: 'Server error', 302: 'Not confirmed' };
   for (const writeStatus of [400, 401, 403, 404, 409, 429, 503, 302]) {
-    const r = await run({ writeStatus }); assert.equal(r.writes.length, 1); assert.equal(r.alerts.at(-1).title, 'Not confirmed');
+    const r = await run({ writeStatus }); assert.equal(r.writes.length, 1); assert.equal(r.alerts.at(-1).title, titles[writeStatus]);
   }
   for (const readStatus of [401, 403, 429, 503, 302]) assert.equal((await run({ readStatus })).writes.length, 0);
 });
