@@ -142,6 +142,7 @@ function load(): DbData {
     if (raw._planningSeq === undefined) raw._planningSeq = 0;
     if (raw._planningGroupSeq === undefined) raw._planningGroupSeq = 0;
     if (raw._planningItemSeq === undefined) raw._planningItemSeq = 0;
+    planning.backfillPlanningData(raw);
     // Backfill order field within each category
     if (Array.isArray(raw.groceryItems)) {
       const catOrders: Record<string, number> = {};
@@ -172,6 +173,25 @@ function save(data: DbData) {
 
 function now() {
   return new Date().toISOString();
+}
+
+/** Shared by the subtask route and planning renames. */
+function setSubtaskFields(data: DbData, taskId: number, subId: number, fields: Partial<Pick<SubTask, 'title' | 'status'>>): Task | undefined {
+  const idx = data.tasks.findIndex(t => t.id === taskId);
+  if (idx === -1) return undefined;
+  const subIdx = data.tasks[idx].subtasks.findIndex((s: SubTask) => s.id === subId);
+  if (subIdx === -1) return undefined;
+  data.tasks[idx].subtasks[subIdx] = { ...data.tasks[idx].subtasks[subIdx], ...fields };
+  data.tasks[idx].updated_at = now();
+  return data.tasks[idx];
+}
+
+/** Task edits requested by planning actions, applied with the Tasks page's logic in the same save. */
+function taskWriter(data: DbData): planning.TaskWriter {
+  return {
+    setTaskFields: (taskId, fields) => { updateTaskState(data, taskId, fields, nextDeadline); },
+    setSubtaskTitle: (taskId, subId, title) => { setSubtaskFields(data, taskId, subId, { title }); },
+  };
 }
 
 /** Load → apply → save; a thrown PlanningError leaves the file untouched. */
@@ -464,14 +484,10 @@ export const db = {
   },
   updateSubtask(taskId: number, subId: number, fields: Partial<Pick<SubTask, 'title' | 'status'>>): Task | undefined {
     const data = load();
-    const idx = data.tasks.findIndex(t => t.id === taskId);
-    if (idx === -1) return undefined;
-    const subIdx = data.tasks[idx].subtasks.findIndex((s: SubTask) => s.id === subId);
-    if (subIdx === -1) return undefined;
-    data.tasks[idx].subtasks[subIdx] = { ...data.tasks[idx].subtasks[subIdx], ...fields };
-    data.tasks[idx].updated_at = now();
+    const task = setSubtaskFields(data, taskId, subId, fields);
+    if (!task) return undefined;
     save(data);
-    return data.tasks[idx];
+    return task;
   },
   deleteSubtask(taskId: number, subId: number): Task | undefined {
     const data = load();
@@ -1195,6 +1211,18 @@ export const db = {
   deletePlanning(id: number): void {
     mutate(data => planning.deletePlanning(data, id));
   },
+  getPlanningMissingTasks(id: number): Task[] {
+    return planning.missingTasks(load(), id);
+  },
+  importPlanningTasks(id: number, body: unknown): { planning: PlanningDetail; skipped: number[] } {
+    return mutate(data => planning.importTasks(data, id, body, now()));
+  },
+  ignorePlanningTasks(id: number, body: unknown): Planning {
+    return mutate(data => planning.ignoreTasks(data, id, body, now()));
+  },
+  clearIgnoredPlanningTasks(id: number): Planning {
+    return mutate(data => planning.clearIgnoredTasks(data, id, now()));
+  },
   reorderPlanning(id: number, body: Record<string, unknown>): void {
     mutate(data => planning.reorderPlanning(data, id, body, now()));
   },
@@ -1202,7 +1230,7 @@ export const db = {
     return mutate(data => planning.createGroup(data, body, now()));
   },
   updatePlanningGroup(id: number, body: Record<string, unknown>): PlanningGroup {
-    return mutate(data => planning.updateGroup(data, id, body, now()));
+    return mutate(data => planning.updateGroup(data, id, body, now(), taskWriter(data)));
   },
   deletePlanningGroup(id: number, mode: unknown): void {
     mutate(data => planning.deleteGroup(data, id, mode, now()));
@@ -1211,18 +1239,21 @@ export const db = {
     return mutate(data => planning.createItem(data, body, now()));
   },
   updatePlanningItem(id: number, body: Record<string, unknown>): PlanningItem {
-    return mutate(data => planning.updateItem(data, id, body, now()));
+    return mutate(data => planning.updateItem(data, id, body, now(), taskWriter(data)));
   },
   deletePlanningItem(id: number): void {
     mutate(data => planning.deleteItem(data, id, now()));
   },
-  addPlanningSegment(itemId: number, body: unknown): PlanningItem {
-    return mutate(data => planning.addSegment(data, itemId, body, now()));
+  addPlanningSegment(itemId: number, body: unknown): planning.SegmentResult {
+    return mutate(data => planning.addSegment(data, itemId, body, now(), taskWriter(data)));
   },
-  updatePlanningSegment(itemId: number, segmentId: string, body: unknown): PlanningItem {
-    return mutate(data => planning.updateSegment(data, itemId, segmentId, body, now()));
+  updatePlanningSegment(itemId: number, segmentId: string, body: unknown): planning.SegmentResult {
+    return mutate(data => planning.updateSegment(data, itemId, segmentId, body, now(), taskWriter(data)));
   },
-  deletePlanningSegment(itemId: number, segmentId: string): PlanningItem {
-    return mutate(data => planning.deleteSegment(data, itemId, segmentId, now()));
+  deletePlanningSegment(itemId: number, segmentId: string): planning.SegmentResult {
+    return mutate(data => planning.deleteSegment(data, itemId, segmentId, now(), taskWriter(data)));
+  },
+  revertPlanningSegment(itemId: number, body: unknown): PlanningItem {
+    return mutate(data => planning.revertSegment(data, itemId, body, now(), taskWriter(data)));
   },
 };

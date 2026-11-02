@@ -23,10 +23,13 @@ interface PlanningToolbarProps {
   onOwnerFilterChange: (value: string) => void;
   brush: number;
   onBrushChange: (index: number) => void;
+  onShowIgnored: () => void;
+  wrapAll: boolean;
+  onWrapAllChange: (wrap: boolean) => void;
   onBack: () => void;
 }
 
-export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onBack }: PlanningToolbarProps) {
+export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onShowIgnored, wrapAll, onWrapAllChange, onBack }: PlanningToolbarProps) {
   const updatePlanning = useUpdatePlanning();
   const isMobile = useMobile();
   // On phones the controls fold away so the timeline keeps most of the screen.
@@ -49,12 +52,19 @@ export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwne
             <><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: section.color }} />{section.name}</>
           ) : <span className="italic">No section</span>}
         </span>
-        {isMobile && (
-          <button onClick={() => setShowControls(s => !s)} aria-expanded={showControls}
-            className="ml-auto flex-shrink-0 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
-            {showControls ? 'Hide options' : 'Options'}
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+          {isMobile && (
+            <button onClick={() => setShowControls(s => !s)} aria-expanded={showControls}
+              className="px-2 py-1 rounded border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+              {showControls ? 'Hide options' : 'Options'}
+            </button>
+          )}
+          <PlanningMenu items={planning.ignoredTaskIds.length > 0 ? [{
+            label: `Show ignored tasks again (${planning.ignoredTaskIds.length})`,
+            hint: 'Tasks you removed or ignored will be suggested again',
+            onSelect: onShowIgnored,
+          }] : []} />
+        </div>
       </div>
 
       {(!isMobile || showControls) && <div className="flex flex-wrap items-end gap-x-5 gap-y-3 mt-3">
@@ -106,7 +116,24 @@ export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwne
           </div>
         )}
 
-        <label className="flex flex-col gap-1 ml-auto">
+        {/* Display controls stay together on the right, and wrap as one block on narrow screens. */}
+        <div className="ml-auto flex items-end gap-x-5 gap-y-3 flex-wrap">
+        <div className="flex flex-col gap-1">
+          <span className={labelCls}>Names</span>
+          <button type="button" aria-pressed={wrapAll} onClick={() => onWrapAllChange(!wrapAll)}
+            title={wrapAll ? 'Show names on one line' : 'Show every name in full'}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded border text-sm cursor-pointer transition-colors
+              ${wrapAll
+                ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-white/[0.06]'}`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h13a3 3 0 010 6h-4m0 0l2-2m-2 2l2 2M4 18h5" />
+            </svg>
+            Wrap all names
+          </button>
+        </div>
+
+        <label className="flex flex-col gap-1">
           <span className={labelCls}>Owner</span>
           <select value={ownerFilter} onChange={e => onOwnerFilterChange(e.target.value)} className={fieldCls}>
             <option value={ALL_OWNERS}>All owners</option>
@@ -114,7 +141,49 @@ export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwne
             <option value={UNASSIGNED}>Unassigned</option>
           </select>
         </label>
+        </div>
       </div>}
+    </div>
+  );
+}
+
+// ── Planning menu ─────────────────────────────────────────────────────────────
+
+interface MenuEntry { label: string; hint?: string; onSelect: () => void }
+
+/** "⋯" menu for occasional planning actions; hidden when it has nothing to offer. */
+function PlanningMenu({ items }: { items: MenuEntry[] }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  if (items.length === 0) return null;
+
+  return (
+    <div ref={root} className="relative">
+      <button onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} aria-label="Planning options" title="Planning options"
+        className="p-1.5 rounded text-gray-500 hover:text-gray-800 hover:bg-gray-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-white/[0.06] cursor-pointer">
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" />
+        </svg>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full mt-1 z-40 w-64 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl">
+          {items.map(item => (
+            <button key={item.label} role="menuitem" onClick={() => { setOpen(false); item.onSelect(); }}
+              className="w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-white/[0.06] cursor-pointer">
+              <span className="block text-sm text-gray-800 dark:text-gray-100">{item.label}</span>
+              {item.hint && <span className="block text-xs text-gray-400 dark:text-gray-500 mt-0.5">{item.hint}</span>}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

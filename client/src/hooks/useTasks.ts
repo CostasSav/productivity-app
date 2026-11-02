@@ -2,6 +2,7 @@ import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../api';
 import { queryKeys } from '../lib/queryKeys';
 import type { Task } from '../types';
+import { invalidateAllMissingTasks } from './usePlannings';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ export function useCreateTask() {
     mutationFn: (data: Partial<Task>) => api.tasks.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: TASK_KEY });
+      invalidateAllMissingTasks(queryClient);
     },
   });
 }
@@ -75,6 +77,8 @@ export function useUpdateTask() {
     onSettled: () => {
       // Resync in the background in case the server made additional changes.
       queryClient.invalidateQueries({ queryKey: TASK_KEY });
+      // A task's section may have changed.
+      invalidateAllMissingTasks(queryClient);
     },
   });
 }
@@ -101,6 +105,7 @@ export function useDeleteTask() {
       queryClient.invalidateQueries({ queryKey: TASK_KEY });
       // Linked planning items are detached (kept as standalone) server-side.
       queryClient.invalidateQueries({ queryKey: queryKeys.plannings });
+      invalidateAllMissingTasks(queryClient);
     },
   });
 }
@@ -127,6 +132,7 @@ export function useTasks() {
     queryClient.setQueryData<Task[]>(TASK_KEY, prev =>
       applyUpdate(prev ?? [], result.task, result.nextTask)
     );
+    invalidateAllMissingTasks(queryClient);
   }
 
   // ── Public API (same shape as before) ───────────────────────────────────

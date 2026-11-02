@@ -1,4 +1,4 @@
-import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, SleepEntry, SleepSettings, SleepStats, Book, BookWithCounts, BookNote, BookQuote, BookQuoteWithBook, BookLearning, BibliothecaSettings, BookStats, OpenLibraryResult, BookStatus, Planning, PlanningSummary, PlanningDetail, PlanningGroup, PlanningItem, PlanningUpdate, PlanningGroupUpdate, PlanningItemUpdate, PlanningSegment, PlanningSegmentInput, PlanningGroupDeleteMode, PlanningReorder } from '../types';
+import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, SleepEntry, SleepSettings, SleepStats, Book, BookWithCounts, BookNote, BookQuote, BookQuoteWithBook, BookLearning, BibliothecaSettings, BookStats, OpenLibraryResult, BookStatus, Planning, PlanningSummary, PlanningDetail, PlanningGroup, PlanningItem, PlanningUpdate, PlanningGroupUpdate, PlanningItemUpdate, PlanningSegment, PlanningSegmentInput, PlanningGroupDeleteMode, PlanningReorder, PlanningImportEntry, PlanningImportResult, PlanningSegmentResult } from '../types';
 
 interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
 interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
@@ -173,6 +173,13 @@ export const api = {
     delete: (id: number) => request<void>(`/api/plannings/${id}`, { method: 'DELETE' }),
     reorder: (id: number, data: PlanningReorder) =>
       request<void>(`/api/plannings/${id}/reorder`, { method: 'PATCH', body: JSON.stringify(data) }),
+    // Section tasks not in the planning yet (and not ignored), by deadline.
+    missingTasks: (id: number) => request<Task[]>(`/api/plannings/${id}/missing-tasks`),
+    importTasks: (id: number, entries: PlanningImportEntry[]) =>
+      request<PlanningImportResult>(`/api/plannings/${id}/import-tasks`, { method: 'POST', body: JSON.stringify(entries) }),
+    ignoreTasks: (id: number, taskIds: number[]) =>
+      request<Planning>(`/api/plannings/${id}/ignore-tasks`, { method: 'POST', body: JSON.stringify(taskIds) }),
+    clearIgnoredTasks: (id: number) => request<Planning>(`/api/plannings/${id}/ignored-tasks`, { method: 'DELETE' }),
   },
   planningGroups: {
     create: (data: { planningId: number; name: string; collapsed?: boolean }) =>
@@ -188,11 +195,16 @@ export const api = {
     update: (id: number, data: PlanningItemUpdate) =>
       request<PlanningItem>(`/api/planning-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: number) => request<void>(`/api/planning-items/${id}`, { method: 'DELETE' }),
-    addSegment: (itemId: number, data: PlanningSegmentInput) =>
-      request<PlanningItem>(`/api/planning-items/${itemId}/segments`, { method: 'POST', body: JSON.stringify(data) }),
-    updateSegment: (itemId: number, segmentId: string, data: Partial<Omit<PlanningSegment, 'id'>>) =>
-      request<PlanningItem>(`/api/planning-items/${itemId}/segments/${encodeURIComponent(segmentId)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    // Changing a linked item's last bar moves its task deadline in the same request;
+    // syncDeadline: false marks a local-only change.
+    addSegment: (itemId: number, data: PlanningSegmentInput & { syncDeadline?: boolean }) =>
+      request<PlanningSegmentResult>(`/api/planning-items/${itemId}/segments`, { method: 'POST', body: JSON.stringify(data) }),
+    updateSegment: (itemId: number, segmentId: string, data: Partial<Omit<PlanningSegment, 'id'>> & { syncDeadline?: boolean }) =>
+      request<PlanningSegmentResult>(`/api/planning-items/${itemId}/segments/${encodeURIComponent(segmentId)}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteSegment: (itemId: number, segmentId: string) =>
-      request<PlanningItem>(`/api/planning-items/${itemId}/segments/${encodeURIComponent(segmentId)}`, { method: 'DELETE' }),
+      request<PlanningSegmentResult>(`/api/planning-items/${itemId}/segments/${encodeURIComponent(segmentId)}`, { method: 'DELETE' }),
+    /** Undo of a synced change: one segment back as it was (null = remove) plus the previous deadline. */
+    revertSegment: (itemId: number, data: { segmentId: string; segment: PlanningSegment | null; deadline: string | null }) =>
+      request<PlanningItem>(`/api/planning-items/${itemId}/segments/revert`, { method: 'POST', body: JSON.stringify(data) }),
   },
 };

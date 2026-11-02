@@ -284,6 +284,8 @@ export interface Planning {
   targetDate: string | null;  // drives S-n countdown labels
   highlightedWeeks: string[]; // Monday dates
   legend: PlanningLegendEntry[];
+  ignoredTaskIds: number[];   // section tasks never to suggest again
+  titleColumnWidth: number;   // px, left panel Title column (150-600)
   createdAt: string;
   updatedAt: string;
 }
@@ -291,6 +293,7 @@ export interface Planning {
 export interface PlanningGroup {
   id: number;
   planningId: number;
+  taskId: number | null;      // parent task the group was imported from
   name: string;
   order: number;              // shares one ordering space with root-level items
   collapsed: boolean;
@@ -312,6 +315,7 @@ export interface PlanningItem {
   title: string;              // fallback snapshot for linked items
   owner: string | null;
   progress: number;           // 0-100, only used when unlinked
+  progressBeforeDone: number | null; // standalone: progress restored when unchecked
   order: number;
   segments: PlanningSegment[];
 }
@@ -325,11 +329,30 @@ export interface PlanningDetail extends Planning {
   items: PlanningItem[];
 }
 
-export type PlanningUpdate = Partial<Pick<Planning, 'name' | 'sectionId' | 'startDate' | 'weekCount' | 'targetDate' | 'highlightedWeeks' | 'legend'>>;
+export type PlanningUpdate = Partial<Pick<Planning, 'name' | 'sectionId' | 'startDate' | 'weekCount' | 'targetDate' | 'highlightedWeeks' | 'legend' | 'titleColumnWidth'>>;
 export type PlanningGroupUpdate = Partial<Pick<PlanningGroup, 'name' | 'order' | 'collapsed'>>;
-export type PlanningItemUpdate = Partial<Pick<PlanningItem, 'groupId' | 'taskId' | 'subtaskId' | 'title' | 'owner' | 'progress' | 'order' | 'segments'>>;
+export type PlanningItemUpdate = Partial<Pick<PlanningItem, 'groupId' | 'taskId' | 'subtaskId' | 'title' | 'owner' | 'progress' | 'progressBeforeDone' | 'order' | 'segments'>>;
+
+/** A task deadline moved by a segment change, reported by the same request. */
+export interface DeadlineSync {
+  taskId: number;
+  from: string | null;
+  to: string;
+}
+export interface PlanningSegmentResult {
+  item: PlanningItem;
+  deadlineSync: DeadlineSync | null;
+}
 export type PlanningSegmentInput = Partial<PlanningSegment> & Pick<PlanningSegment, 'start' | 'end'>;
 export type PlanningGroupDeleteMode = 'deleteItems' | 'moveToRoot';
+export interface PlanningImportEntry {
+  taskId: number;
+  groupId: number | null;     // ignored for tasks with subtasks (they become their own group)
+}
+export interface PlanningImportResult {
+  planning: PlanningDetail;
+  skipped: number[];          // task ids that were already present
+}
 export interface PlanningReorder {
   groups?: { id: number; order: number }[];
   items?: { id: number; order: number; groupId: number | null }[];

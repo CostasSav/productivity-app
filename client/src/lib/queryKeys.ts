@@ -53,4 +53,6 @@ export const queryKeys = {
   // Project planning
   plannings: ['plannings'] as const,
   planning: (id: number) => ['plannings', id] as const,
+  planningMissingTasksAll: ['planningMissingTasks'] as const,
+  planningMissingTasks: (id: number) => ['planningMissingTasks', id] as const,
 };

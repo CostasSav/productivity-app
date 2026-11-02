@@ -252,6 +252,8 @@ export interface Planning {
   targetDate: string | null;  // YYYY-MM-DD, drives S-n countdown labels
   highlightedWeeks: string[]; // Monday dates
   legend: PlanningLegendEntry[];
+  ignoredTaskIds: number[];   // section tasks never to suggest again
+  titleColumnWidth: number;   // px, left panel Title column (150-600)
   createdAt: string;
   updatedAt: string;
 }
@@ -259,6 +261,7 @@ export interface Planning {
 export interface PlanningGroup {
   id: number;
   planningId: number;
+  taskId: number | null;      // parent task the group was imported from
   name: string;
   order: number;
   collapsed: boolean;
@@ -280,8 +283,16 @@ export interface PlanningItem {
   title: string;             // fallback snapshot for linked items
   owner: string | null;
   progress: number;          // 0-100, only used when unlinked
+  progressBeforeDone: number | null; // standalone: progress to restore when unchecked
   order: number;
   segments: PlanningSegment[];
+}
+
+/** A task deadline moved by a segment change in the same request. */
+export interface DeadlineSync {
+  taskId: number;
+  from: string | null;
+  to: string;
 }
 
 export interface PlanningSummary extends Planning {

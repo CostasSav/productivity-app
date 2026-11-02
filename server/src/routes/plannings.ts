@@ -1,11 +1,14 @@
 import { Router, type ErrorRequestHandler, type Request } from 'express';
 import { db } from '../db/database';
 import { PlanningError } from '../db/planning';
+import { CompletionError } from '../db/completion';
 
 // All validation lives in db/planning.ts and surfaces as PlanningError(400/404/409).
 
 const planningError: ErrorRequestHandler = (error, _req, res, next) => {
   if (error instanceof PlanningError) res.status(error.status).json({ error: error.message });
+  // Task edits made through a planning use the task logic, which reports its own conflicts.
+  else if (error instanceof CompletionError) res.status(error.status).json({ error: error.code });
   else next(error);
 };
 
@@ -40,6 +43,25 @@ planningsRouter.patch('/:id', (req, res) => {
 planningsRouter.delete('/:id', (req, res) => {
   db.deletePlanning(id(req));
   res.status(204).send();
+});
+
+// Section tasks the planning doesn't contain yet (and hasn't ignored), by deadline.
+planningsRouter.get('/:id/missing-tasks', (req, res) => {
+  res.json(db.getPlanningMissingTasks(id(req)));
+});
+
+// Body: [{ taskId, groupId }]. Responds { planning, skipped } (already-present task ids).
+planningsRouter.post('/:id/import-tasks', (req, res) => {
+  res.json(db.importPlanningTasks(id(req), req.body));
+});
+
+// Body: [taskId]
+planningsRouter.post('/:id/ignore-tasks', (req, res) => {
+  res.json(db.ignorePlanningTasks(id(req), req.body));
+});
+
+planningsRouter.delete('/:id/ignored-tasks', (req, res) => {
+  res.json(db.clearIgnoredPlanningTasks(id(req)));
 });
 
 // Body: { groups?: [{ id, order }], items?: [{ id, order, groupId }] }, applied atomically.
@@ -87,7 +109,9 @@ planningItemsRouter.delete('/:id', (req, res) => {
   res.status(204).send();
 });
 
-// Segment routes return the whole updated item.
+// Segment routes return { item, deadlineSync }: a change to a linked item's last
+// bar moves its task deadline in the same request. Send syncDeadline: false for
+// local-only changes.
 planningItemsRouter.post('/:id/segments', (req, res) => {
   res.status(201).json(db.addPlanningSegment(id(req), body(req)));
 });
@@ -98,6 +122,11 @@ planningItemsRouter.patch('/:id/segments/:segmentId', (req, res) => {
 
 planningItemsRouter.delete('/:id/segments/:segmentId', (req, res) => {
   res.json(db.deletePlanningSegment(id(req), req.params.segmentId));
+});
+
+// Undo of a synced change. Body: { segmentId, segment | null, deadline }. Returns the item.
+planningItemsRouter.post('/:id/segments/revert', (req, res) => {
+  res.json(db.revertPlanningSegment(id(req), body(req)));
 });
 
 planningItemsRouter.use(planningError);

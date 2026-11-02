@@ -1,10 +1,11 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { queryKeys } from '../lib/queryKeys';
 import type {
   PlanningSummary, PlanningDetail, PlanningGroup, PlanningItem, PlanningSegment, PlanningUpdate, PlanningGroupUpdate,
-  PlanningItemUpdate, PlanningSegmentInput, PlanningGroupDeleteMode, PlanningReorder,
+  PlanningItemUpdate, PlanningSegmentInput, PlanningGroupDeleteMode, PlanningReorder, PlanningImportEntry, Task,
 } from '../types';
+import { lastSegmentEnd, syncedDeadline } from '../utils/planning';
 
 // ── Shared keys ───────────────────────────────────────────────────────────────
 
@@ -44,6 +45,14 @@ function useDetailMutation<V extends DetailVars, R>(options: {
   apply: (detail: PlanningDetail, vars: V, tempId: number) => PlanningDetail;
   // Swap a temporary entity for the server's as soon as it exists.
   reconcile?: (detail: PlanningDetail, result: R, tempId: number) => PlanningDetail;
+  // Deletions can add to ignoredTaskIds server-side, which changes missing tasks.
+  refreshMissingTasks?: boolean;
+  /**
+   * Mirrors, on the tasks cache, what the server will do to a linked task in the
+   * same request (deadline sync, rename). Returns true when a task is affected:
+   * the tasks cache is then rolled back on error and refetched when settled.
+   */
+  patchTasks?: (tasks: TasksPatcher, before: PlanningDetail, after: PlanningDetail, vars: V) => boolean;
 }) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -55,8 +64,18 @@ function useDetailMutation<V extends DetailVars, R>(options: {
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<PlanningDetail>(key);
       const tempId = nextTempId--;
-      if (previous) queryClient.setQueryData<PlanningDetail>(key, options.apply(previous, vars, tempId));
-      return { previous, tempId };
+      let previousTasks: Task[] | undefined;
+      let touchesTasks = false;
+      if (previous) {
+        const next = options.apply(previous, vars, tempId);
+        queryClient.setQueryData<PlanningDetail>(key, next);
+        if (options.patchTasks) {
+          await queryClient.cancelQueries({ queryKey: queryKeys.tasks });
+          previousTasks = queryClient.getQueryData<Task[]>(queryKeys.tasks);
+          touchesTasks = options.patchTasks(tasksPatcher(queryClient), previous, next, vars);
+        }
+      }
+      return { previous, tempId, previousTasks, touchesTasks };
     },
 
     onSuccess: (result, vars, ctx) => {
@@ -68,9 +87,13 @@ function useDetailMutation<V extends DetailVars, R>(options: {
 
     onError: (_err, vars, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(queryKeys.planning(vars.planningId), ctx.previous);
+      if (ctx?.touchesTasks && ctx.previousTasks) queryClient.setQueryData(queryKeys.tasks, ctx.previousTasks);
     },
 
-    onSettled: (_data, _err, vars) => {
+    onSettled: (_data, _err, vars, ctx) => {
+      // Tasks page, section page and calendar all read this cache.
+      if (ctx?.touchesTasks) queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+      if (options.refreshMissingTasks) queryClient.invalidateQueries({ queryKey: queryKeys.planningMissingTasks(vars.planningId) });
       // Refetch only after the last in-flight mutation, so an early response
       // never overwrites newer optimistic state while the user keeps dragging.
       if (queryClient.isMutating({ mutationKey: DETAIL_MUTATION_KEY }) === 1) {
@@ -78,6 +101,41 @@ function useDetailMutation<V extends DetailVars, R>(options: {
       }
     },
   });
+}
+
+/** Optimistic edits of the tasks cache made on behalf of planning actions. */
+export interface TasksPatcher {
+  get(taskId: number): Task | undefined;
+  patch(taskId: number, fields: Partial<Task>): void;
+  patchSubtaskTitle(taskId: number, subtaskId: number, title: string): void;
+}
+
+function tasksPatcher(queryClient: QueryClient): TasksPatcher {
+  const update = (fn: (t: Task) => Task, taskId: number) =>
+    queryClient.setQueryData<Task[]>(queryKeys.tasks, prev => prev?.map(t => (t.id === taskId ? fn(t) : t)));
+  return {
+    get: taskId => queryClient.getQueryData<Task[]>(queryKeys.tasks)?.find(t => t.id === taskId),
+    patch: (taskId, fields) => update(t => ({ ...t, ...fields }), taskId),
+    patchSubtaskTitle: (taskId, subtaskId, title) =>
+      update(t => ({ ...t, subtasks: t.subtasks.map(s => (s.id === subtaskId ? { ...s, title } : s)) }), taskId),
+  };
+}
+
+/** Optimistic deadline sync for one item whose segments changed (same rule as the server). */
+function patchDeadline(tasks: TasksPatcher, before: PlanningDetail, after: PlanningDetail, itemId: number, enabled = true): boolean {
+  const was = before.items.find(i => i.id === itemId);
+  const now = after.items.find(i => i.id === itemId);
+  if (!enabled || !was || !now || now.taskId === null || now.subtaskId !== null) return false;
+  const task = tasks.get(now.taskId);
+  if (!task) return false;
+  const to = syncedDeadline(task.deadline, lastSegmentEnd(was.segments), lastSegmentEnd(now.segments));
+  if (to !== undefined) tasks.patch(task.id, { deadline: to });
+  return true;
+}
+
+/** Any task change can move a task in or out of a section: refresh every planning's list. */
+export function invalidateAllMissingTasks(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: queryKeys.planningMissingTasksAll });
 }
 
 function mapItem(detail: PlanningDetail, itemId: number, fn: (item: PlanningItem) => PlanningItem): PlanningDetail {
@@ -154,6 +212,7 @@ export function useDeletePlanning() {
     },
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: queryKeys.planning(id) });
+      queryClient.removeQueries({ queryKey: queryKeys.planningMissingTasks(id) });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: LIST_KEY, exact: true });
@@ -188,7 +247,7 @@ export function useCreatePlanningGroup() {
       api.planningGroups.create({ planningId, name, collapsed }),
     apply: (detail, { planningId, name, collapsed }, tempId) => ({
       ...detail,
-      groups: [...detail.groups, { id: tempId, planningId, name, collapsed: collapsed ?? false, order: nextOrder(detail, null) }],
+      groups: [...detail.groups, { id: tempId, planningId, taskId: null, name, collapsed: collapsed ?? false, order: nextOrder(detail, null) }],
     }),
     reconcile: (detail, group: PlanningGroup, tempId) => ({
       ...detail,
@@ -200,6 +259,12 @@ export function useCreatePlanningGroup() {
 export function useUpdatePlanningGroup() {
   return useDetailMutation({
     mutationFn: ({ id, data }: DetailVars & { id: number; data: PlanningGroupUpdate }) => api.planningGroups.update(id, data),
+    patchTasks: (tasks, before, _after, { id, data }) => {
+      const group = before.groups.find(g => g.id === id);
+      if (data.name === undefined || !group || group.taskId === null || !tasks.get(group.taskId)) return false;
+      tasks.patch(group.taskId, { title: data.name });
+      return true;
+    },
     apply: (detail, { id, data }) => ({
       ...detail,
       groups: sortByOrder(detail.groups.map(g => (g.id === id ? { ...g, ...data } : g))),
@@ -210,6 +275,7 @@ export function useUpdatePlanningGroup() {
 export function useDeletePlanningGroup() {
   return useDetailMutation({
     mutationFn: ({ id, mode }: DetailVars & { id: number; mode: PlanningGroupDeleteMode }) => api.planningGroups.delete(id, mode),
+    refreshMissingTasks: true,
     apply: (detail, { id, mode }) => {
       const groups = detail.groups.filter(g => g.id !== id);
       if (mode === 'deleteItems') return { ...detail, groups, items: detail.items.filter(i => i.groupId !== id) };
@@ -234,7 +300,7 @@ export function useCreatePlanningItem() {
       const groupId = data.groupId ?? null;
       const item: PlanningItem = {
         id: tempId, planningId, groupId, taskId: data.taskId ?? null, subtaskId: data.subtaskId ?? null,
-        title: data.title ?? '', owner: data.owner ?? null, progress: data.progress ?? 0,
+        title: data.title ?? '', owner: data.owner ?? null, progress: data.progress ?? 0, progressBeforeDone: null,
         order: nextOrder(detail, groupId), segments: data.segments ?? [],
       };
       return { ...detail, items: [...detail.items, item] };
@@ -249,6 +315,14 @@ export function useCreatePlanningItem() {
 export function useUpdatePlanningItem() {
   return useDetailMutation({
     mutationFn: ({ id, data }: DetailVars & { id: number; data: PlanningItemUpdate }) => api.planningItems.update(id, data),
+    // Renaming a linked item renames its task (or subtask) on the server too.
+    patchTasks: (tasks, before, _after, { id, data }) => {
+      const item = before.items.find(i => i.id === id);
+      if (data.title === undefined || !item || item.taskId === null || !tasks.get(item.taskId)) return false;
+      if (item.subtaskId !== null) tasks.patchSubtaskTitle(item.taskId, item.subtaskId, data.title);
+      else tasks.patch(item.taskId, { title: data.title });
+      return true;
+    },
     apply: (detail, { id, data }) => {
       const moved = mapItem(detail, id, item => {
         const next = { ...item, ...data };
@@ -267,6 +341,7 @@ export function useUpdatePlanningItem() {
 export function useDeletePlanningItem() {
   return useDetailMutation({
     mutationFn: ({ id }: DetailVars & { id: number }) => api.planningItems.delete(id),
+    refreshMissingTasks: true,
     apply: (detail, { id }) => ({ ...detail, items: detail.items.filter(i => i.id !== id) }),
   });
 }
@@ -276,8 +351,9 @@ export function useDeletePlanningItem() {
 
 export function useAddPlanningSegment() {
   return useDetailMutation({
-    mutationFn: ({ itemId, segment }: DetailVars & { itemId: number; segment: PlanningSegmentInput & { id: string } }) =>
-      api.planningItems.addSegment(itemId, segment),
+    mutationFn: ({ itemId, segment, syncDeadline }: DetailVars & { itemId: number; segment: PlanningSegmentInput & { id: string }; syncDeadline?: boolean }) =>
+      api.planningItems.addSegment(itemId, { ...segment, ...(syncDeadline === false && { syncDeadline }) }),
+    patchTasks: (tasks, before, after, { itemId, syncDeadline }) => patchDeadline(tasks, before, after, itemId, syncDeadline !== false),
     apply: (detail, { itemId, segment }) =>
       mapItem(detail, itemId, item => ({
         ...item,
@@ -288,8 +364,9 @@ export function useAddPlanningSegment() {
 
 export function useUpdatePlanningSegment() {
   return useDetailMutation({
-    mutationFn: ({ itemId, segmentId, data }: DetailVars & { itemId: number; segmentId: string; data: Partial<Omit<PlanningSegment, 'id'>> }) =>
-      api.planningItems.updateSegment(itemId, segmentId, data),
+    mutationFn: ({ itemId, segmentId, data, syncDeadline }: DetailVars & { itemId: number; segmentId: string; data: Partial<Omit<PlanningSegment, 'id'>>; syncDeadline?: boolean }) =>
+      api.planningItems.updateSegment(itemId, segmentId, { ...data, ...(syncDeadline === false && { syncDeadline }) }),
+    patchTasks: (tasks, before, after, { itemId, syncDeadline }) => patchDeadline(tasks, before, after, itemId, syncDeadline !== false),
     apply: (detail, { itemId, segmentId, data }) =>
       mapItem(detail, itemId, item => ({
         ...item,
@@ -302,7 +379,108 @@ export function useDeletePlanningSegment() {
   return useDetailMutation({
     mutationFn: ({ itemId, segmentId }: DetailVars & { itemId: number; segmentId: string }) =>
       api.planningItems.deleteSegment(itemId, segmentId),
+    patchTasks: (tasks, before, after, { itemId }) => patchDeadline(tasks, before, after, itemId),
     apply: (detail, { itemId, segmentId }) =>
       mapItem(detail, itemId, item => ({ ...item, segments: item.segments.filter(s => s.id !== segmentId) })),
+  });
+}
+
+/** Undo of a synced segment change: restores the segment and the task's previous deadline. */
+export function useRevertSegment() {
+  return useDetailMutation({
+    mutationFn: ({ itemId, segmentId, segment, deadline }: DetailVars & { itemId: number; segmentId: string; segment: PlanningSegment | null; deadline: string | null }) =>
+      api.planningItems.revertSegment(itemId, { segmentId, segment, deadline }),
+    apply: (detail, { itemId, segmentId, segment }) =>
+      mapItem(detail, itemId, item => ({
+        ...item,
+        segments: segment === null
+          ? item.segments.filter(s => s.id !== segmentId)
+          : item.segments.some(s => s.id === segmentId)
+            ? item.segments.map(s => (s.id === segmentId ? segment : s))
+            : [...item.segments, segment],
+      })),
+    patchTasks: (tasks, before, _after, { itemId, deadline }) => {
+      const item = before.items.find(i => i.id === itemId);
+      if (!item || item.taskId === null || item.subtaskId !== null || !tasks.get(item.taskId)) return false;
+      tasks.patch(item.taskId, { deadline });
+      return true;
+    },
+  });
+}
+
+// ── Missing section tasks ─────────────────────────────────────────────────────
+
+/** Tasks of the planning's section that it doesn't contain and hasn't ignored. */
+export function useMissingTasks(planningId: number | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.planningMissingTasks(planningId ?? 0),
+    queryFn: () => api.plannings.missingTasks(planningId!),
+    enabled: planningId != null,
+  });
+}
+
+/** Imports tasks with the same conversion as section import. Skips tasks already present. */
+export function useImportTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ planningId, entries }: { planningId: number; entries: PlanningImportEntry[] }) =>
+      api.plannings.importTasks(planningId, entries),
+
+    // Imported tasks leave the suggestion list immediately.
+    onMutate: async ({ planningId, entries }) => {
+      const key = queryKeys.planningMissingTasks(planningId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<Task[]>(key);
+      const ids = new Set(entries.map(e => e.taskId));
+      queryClient.setQueryData<Task[]>(key, prev => prev?.filter(t => !ids.has(t.id)));
+      return { previous };
+    },
+    onError: (_err, { planningId }, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.planningMissingTasks(planningId), ctx.previous);
+    },
+    onSuccess: ({ planning }) => {
+      queryClient.setQueryData(queryKeys.planning(planning.id), planning);
+    },
+    onSettled: (_data, _err, { planningId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.planning(planningId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.planningMissingTasks(planningId) });
+      queryClient.invalidateQueries({ queryKey: LIST_KEY, exact: true }); // item counts
+    },
+  });
+}
+
+export function useIgnoreTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ planningId, taskIds }: { planningId: number; taskIds: number[] }) =>
+      api.plannings.ignoreTasks(planningId, taskIds),
+
+    onMutate: async ({ planningId, taskIds }) => {
+      const key = queryKeys.planningMissingTasks(planningId);
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<Task[]>(key);
+      const ids = new Set(taskIds);
+      queryClient.setQueryData<Task[]>(key, prev => prev?.filter(t => !ids.has(t.id)));
+      return { previous };
+    },
+    onError: (_err, { planningId }, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(queryKeys.planningMissingTasks(planningId), ctx.previous);
+    },
+    onSettled: (_data, _err, { planningId }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.planningMissingTasks(planningId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.planning(planningId) }); // ignoredTaskIds
+    },
+  });
+}
+
+/** Un-ignores every task of the planning, so all of them can be suggested again. */
+export function useClearIgnoredTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (planningId: number) => api.plannings.clearIgnoredTasks(planningId),
+    onSettled: (_data, _err, planningId) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.planningMissingTasks(planningId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.planning(planningId) });
+    },
   });
 }

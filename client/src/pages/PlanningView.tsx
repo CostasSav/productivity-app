@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
-import { usePlanning } from '../hooks/usePlannings';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useClearIgnoredTasks, useMissingTasks, usePlanning } from '../hooks/usePlannings';
 import { useSections } from '../hooks/useSections';
 import { useTasksContext } from '../context/TasksContext';
 import { Spinner } from '../components/ui/Spinner';
+import { Modal } from '../components/ui/Modal';
 import { TaskForm } from '../components/tasks/TaskForm';
 import { PlanningToolbar, ALL_OWNERS } from '../components/planning/PlanningToolbar';
 import { PlanningGrid } from '../components/planning/PlanningGrid';
-import { indexTasks } from '../utils/planning';
+import { ReviewMissingTasksModal } from '../components/planning/ReviewMissingTasksModal';
+import { formatWeekdayDayMonth, indexTasks } from '../utils/planning';
 import type { Task } from '../types';
 
 interface PlanningViewProps {
@@ -14,13 +16,32 @@ interface PlanningViewProps {
   onBack: () => void;
 }
 
+const HIGHLIGHT_MS = 2600;
+const TOAST_MS = 3000;
+const TOAST_ACTION_MS = 6000;
+
 export function PlanningView({ id, onBack }: PlanningViewProps) {
   const { data: planning, isLoading, isError } = usePlanning(id);
   const { sections, createSection } = useSections();
-  const { tasks, loading: tasksLoading, updateTask } = useTasksContext();
+  const { tasks, loading: tasksLoading, updateTask, toggleSubtask } = useTasksContext();
+  // Only plannings with a section can have missing tasks.
+  const { data: missingTasks = [] } = useMissingTasks(planning?.sectionId != null ? id : null);
+  const clearIgnored = useClearIgnoredTasks();
   const [ownerFilter, setOwnerFilter] = useState(ALL_OWNERS);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [brushIndex, setBrushIndex] = useState(0);
+  const [reviewing, setReviewing] = useState(false);
+  const [wrapAll, setWrapAll] = useState(false);
+  const [confirmShowIgnored, setConfirmShowIgnored] = useState(false);
+  const [highlight, setHighlight] = useState<ReadonlySet<number>>(() => new Set());
+  // Each toast gets its own id so a repeat message restarts the timer, but re-renders don't.
+  const [toast, setToast] = useState<{ id: number; message: string; action?: { label: string; run: () => void } } | null>(null);
+
+  useEffect(() => {
+    if (!highlight.size) return;
+    const t = setTimeout(() => setHighlight(new Set()), HIGHLIGHT_MS);
+    return () => clearTimeout(t);
+  }, [highlight]);
 
   const tasksById = useMemo(() => indexTasks(tasks), [tasks]);
   const owners = useMemo(
@@ -46,20 +67,116 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
     );
   }
 
+  const section = sections.find(s => s.id === planning.sectionId);
+  const missingCount = section ? missingTasks.length : 0;
+  const ignoredCount = planning.ignoredTaskIds.length;
+
   return (
     <div className="h-full flex flex-col">
-      <PlanningToolbar planning={planning} section={sections.find(s => s.id === planning.sectionId)} owners={owners}
-        ownerFilter={activeFilter} onOwnerFilterChange={setOwnerFilter} brush={brush} onBrushChange={setBrushIndex} onBack={onBack} />
+      <PlanningToolbar planning={planning} section={section} owners={owners}
+        ownerFilter={activeFilter} onOwnerFilterChange={setOwnerFilter} brush={brush} onBrushChange={setBrushIndex}
+        onShowIgnored={() => setConfirmShowIgnored(true)} wrapAll={wrapAll} onWrapAllChange={setWrapAll} onBack={onBack} />
+
+      {missingCount > 0 && section && (
+        <div role="status" className="flex-shrink-0 flex items-center gap-3 px-4 md:px-6 py-2 border-b border-teal-100 dark:border-teal-500/10 bg-teal-50/70 dark:bg-teal-500/[0.06] text-sm">
+          <svg className="w-4 h-4 flex-shrink-0 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="min-w-0 text-gray-700 dark:text-zinc-300">
+            {missingCount} task{missingCount === 1 ? '' : 's'} in{' '}
+            <span className="inline-flex items-center gap-1 font-medium text-gray-900 dark:text-zinc-100">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: section.color }} />{section.name}
+            </span>{' '}
+            {missingCount === 1 ? "isn't" : "aren't"} in this planning
+          </span>
+          <button onClick={() => setReviewing(true)}
+            className="ml-auto flex-shrink-0 px-3 py-1 rounded text-sm font-medium text-teal-700 hover:bg-teal-100 dark:text-teal-300 dark:hover:bg-teal-500/10 cursor-pointer">
+            Review
+          </button>
+        </div>
+      )}
+
       <datalist id={ownersListId}>
         {owners.map(o => <option key={o} value={o} />)}
       </datalist>
       <PlanningGrid planning={planning} tasksById={tasksById} tasksLoading={tasksLoading} ownerFilter={activeFilter}
-        ownersListId={ownersListId} brushColor={brushColor} onEditTask={setEditingTask} />
+        ownersListId={ownersListId} brushColor={brushColor} highlightTaskIds={highlight} wrapAll={wrapAll} onEditTask={setEditingTask}
+        onToggleTaskDone={(task, done) => {
+          // Exactly the Tasks page path: optimistic cache update, recurrence handled by the server.
+          updateTask(task.id, { status: done ? 'done' : 'todo' }).catch(() => {});
+        }}
+        onToggleSubtaskDone={(taskId, subtaskId, done) => { toggleSubtask(taskId, subtaskId, done).catch(() => {}); }}
+        onDeadlineSynced={({ title, to, undo }) => setToast({
+          id: Date.now(),
+          message: `Deadline of ${title} moved to ${formatWeekdayDayMonth(to)}`,
+          action: { label: 'Undo', run: undo },
+        })}
+        onLinkedRemoved={count => setToast({
+          id: Date.now(),
+          message: count === 1
+            ? 'Removed from this planning, the task itself is unchanged'
+            : 'Removed from this planning, the tasks themselves are unchanged',
+        })} />
+
+      {reviewing && (
+        <ReviewMissingTasksModal planning={planning} section={section} tasks={missingTasks}
+          onClose={() => setReviewing(false)}
+          onImported={taskIds => {
+            // New rows have no owner yet: make sure an owner filter doesn't hide them.
+            setOwnerFilter(ALL_OWNERS);
+            setHighlight(new Set(taskIds));
+          }} />
+      )}
+
+      {confirmShowIgnored && (
+        <Modal
+          title="Show ignored tasks again?"
+          onClose={() => setConfirmShowIgnored(false)}
+          footer={
+            <>
+              <button onClick={() => setConfirmShowIgnored(false)} className="px-4 py-3 min-h-[44px] rounded text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
+              <button
+                onClick={() => { clearIgnored.mutate(planning.id); setConfirmShowIgnored(false); }}
+                className="px-4 py-3 min-h-[44px] bg-orange-500 text-white rounded hover:bg-orange-600 cursor-pointer active:opacity-90">
+                Show them again
+              </button>
+            </>
+          }
+        >
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            {ignoredCount} task{ignoredCount === 1 ? '' : 's'} you removed from this planning or chose to ignore will be suggested
+            again in the "not in this planning" banner. Nothing is added to the planning until you review them.
+          </p>
+        </Modal>
+      )}
+
+      {toast && <PlanningToast key={toast.id} message={toast.message} action={toast.action} onDone={() => setToast(null)} />}
 
       {editingTask && (
         // Editing here changes the real task on purpose; the planning only reads it.
         <TaskForm initial={editingTask} sections={sections} onCreateSection={createSection}
           onSave={data => updateTask(editingTask.id, data)} onClose={() => setEditingTask(null)} />
+      )}
+    </div>
+  );
+}
+
+/** Same pill style as the Sleep page toast; an action (Undo) keeps it up a little longer. */
+function PlanningToast({ message, action, onDone }: { message: string; action?: { label: string; run: () => void }; onDone: () => void }) {
+  const done = useRef(onDone);
+  done.current = onDone;
+  useEffect(() => {
+    const t = setTimeout(() => done.current(), action ? TOAST_ACTION_MS : TOAST_MS);
+    return () => clearTimeout(t);
+  }, [action]);
+  return (
+    <div role="status" className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-gray-900 dark:bg-zinc-700 text-white text-sm pl-4 pr-2 py-2 rounded-full shadow-lg z-50 animate-fade-in max-w-[calc(100vw-2rem)]">
+      <span className={action ? 'min-w-0' : 'pr-2 text-center'}>{message}</span>
+      {action && (
+        <button onClick={() => { action.run(); done.current(); }}
+          className="flex-shrink-0 px-3 py-1 rounded-full text-sm font-semibold text-teal-300 hover:bg-white/10 cursor-pointer">
+          {action.label}
+        </button>
       )}
     </div>
   );

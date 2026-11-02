@@ -4,8 +4,9 @@ import { useMobile } from '../../hooks/useMobile';
 import {
   useUpdatePlanning, useCreatePlanningGroup, useUpdatePlanningGroup, useDeletePlanningGroup,
   useCreatePlanningItem, useUpdatePlanningItem, useDeletePlanningItem, useReorderPlanning,
-  useAddPlanningSegment, useUpdatePlanningSegment, useDeletePlanningSegment,
+  useAddPlanningSegment, useUpdatePlanningSegment, useDeletePlanningSegment, useRevertSegment,
 } from '../../hooks/usePlannings';
+import { DeadlineIssueButton } from './DeadlineIssueButton';
 import { Modal } from '../ui/Modal';
 import { InlineText } from './InlineText';
 import { SegmentMenu } from './SegmentMenu';
@@ -14,11 +15,11 @@ import { ALL_OWNERS, UNASSIGNED } from './PlanningToolbar';
 import {
   clampCreate, clampMove, clampResize, computeReorder, containerEntries, countdownLabel, formatPlanningDate, freeGap,
   mondayOf, monthSpans, newSegmentId, nextProgressStep, planningItemProgress, planningItemTitle, planningWeeks,
-  resolvePlanningLink, weekEnd, weekMonday, weeksBetween,
-  type DropTarget, type EntryKey, type Gap, type PlanningLink, type WeekSpan,
+  resolvePlanningLink, weekEnd, weekMonday, weeksBetween, deadlineIssue, deadlineSyncTask, alignedToDeadline,
+  type DeadlineIssue, type DropTarget, type EntryKey, type Gap, type PlanningLink, type WeekSpan,
 } from '../../utils/planning';
 import { localDateStr } from '../../utils/habitStats';
-import type { PlanningDetail, PlanningGroup, PlanningItem, PlanningItemUpdate, PlanningSegment, Task } from '../../types';
+import type { DeadlineSync, PlanningDetail, PlanningGroup, PlanningItem, PlanningItemUpdate, PlanningSegment, Task } from '../../types';
 
 // Layout: one scroll container. The left panel is `sticky left-0` and the
 // header `sticky top-0`, so both stay frozen without any JS scroll syncing.
@@ -36,6 +37,9 @@ const ROW_H = 36;
 const GROUP_GAP = 12;
 const ADD_ROW_H = ROW_H - 4;
 const HEADER_ROW_H = 24;
+const BAR_H = ROW_H - 12;            // bars keep this height and stay centered when a row grows
+const MIN_TITLE_W = 150;
+const MAX_TITLE_W = 600;
 const NEST_INDENT = 24;
 const LONG_PRESS_MS = 400;
 const DESKTOP_COLS = { title: 280, owner: 120, progress: 84 };
@@ -46,6 +50,8 @@ const rowBorder = 'border-b border-gray-100 dark:border-zinc-800/60';
 const colBorder = 'border-l border-gray-100 dark:border-zinc-800/60';
 const iconBtn = 'p-1 rounded flex-shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500';
 const revealOnHover = 'md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100';
+const highlightRow = 'bg-amber-50 dark:bg-[#211c0f]';
+const highlightPanel = 'bg-amber-50 dark:bg-[#211c0f]';
 
 export function matchesOwner(item: PlanningItem, filter: string): boolean {
   if (filter === ALL_OWNERS) return true;
@@ -89,12 +95,28 @@ interface PlanningGridProps {
   ownerFilter: string;
   ownersListId: string;
   brushColor: string;
+  /** Rows of these tasks flash briefly (e.g. just imported); the first one is scrolled into view. */
+  highlightTaskIds?: ReadonlySet<number>;
+  /** Called after deleting rows that were linked to tasks (the tasks themselves are untouched). */
+  onLinkedRemoved?: (count: number) => void;
+  /** A bar change moved a linked task's deadline; `undo` restores the bar and the previous deadline. */
+  onDeadlineSynced?: (info: { title: string; to: string; undo: () => void }) => void;
+  /** Done toggles for linked rows go through the Tasks page's own update path. */
+  onToggleTaskDone: (task: Task, done: boolean) => void;
+  onToggleSubtaskDone: (taskId: number, subtaskId: number, done: boolean) => void;
+  /** Every name expanded at once (toolbar toggle); a click on a row then shortens just that row. */
+  wrapAll?: boolean;
   onEditTask: (task: Task) => void;
 }
 
-export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, ownersListId, brushColor, onEditTask }: PlanningGridProps) {
+export function PlanningGrid({
+  planning, tasksById, tasksLoading, ownerFilter, ownersListId, brushColor, highlightTaskIds,
+  onLinkedRemoved, onDeadlineSynced, onToggleTaskDone, onToggleSubtaskDone, wrapAll = false, onEditTask,
+}: PlanningGridProps) {
   const isMobile = useMobile();
-  const cols = isMobile ? MOBILE_COLS : DESKTOP_COLS;
+  // Title width is per planning (dragged in the header); phones keep the compact layout.
+  const [liveTitleW, setLiveTitleW] = useState<number | null>(null);
+  const cols = isMobile ? MOBILE_COLS : { ...DESKTOP_COLS, title: liveTitleW ?? planning.titleColumnWidth ?? DESKTOP_COLS.title };
   const leftW = cols.title + cols.owner + cols.progress;
   const timelineW = planning.weekCount * WEEK_W;
   const totalW = leftW + timelineW;
@@ -112,6 +134,7 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
   const addSegment = useAddPlanningSegment();
   const updateSegment = useUpdatePlanningSegment();
   const deleteSegment = useDeletePlanningSegment();
+  const revertSegment = useRevertSegment();
   const [pendingGroupDelete, setPendingGroupDelete] = useState<{ group: PlanningGroup; count: number } | null>(null);
   const [menu, setMenu] = useState<{ itemId: number; segmentId: string; x: number; y: number } | null>(null);
 
@@ -162,6 +185,16 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
     return rows.map(row => { const box = { top, height: rowHeight(row) }; top += box.height; return box; });
   }, [rows]);
 
+  // ── Expanded (wrapped) names: per row, in component state only ──────────────
+  const [toggledRows, setToggledRows] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => { setToggledRows(new Set()); }, [wrapAll]);
+  const isExpanded = (key: string) => wrapAll !== toggledRows.has(key);
+  const toggleExpanded = (key: string) => setToggledRows(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
   // Drag callbacks outlive renders, so they read the latest data through a ref.
   const latest = useRef({ planning, rows, layout });
   latest.current = { planning, rows, layout };
@@ -176,7 +209,75 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
     if (inRange(currentIdx)) scrollRef.current.scrollLeft = Math.max(0, (currentIdx - 2) * WEEK_W);
   }, [planning.id, currentIdx]);
 
+  // ── Highlight (e.g. just-imported rows) and bring the first one into view ──
+  const isHighlighted = (row: Row) => {
+    if (!highlightTaskIds?.size) return false;
+    if (row.kind === 'item') return row.item.taskId !== null && highlightTaskIds.has(row.item.taskId);
+    if (row.kind === 'group') {
+      // A collapsed group stands in for the new items hidden inside it.
+      return (row.group.taskId !== null && highlightTaskIds.has(row.group.taskId))
+        || (row.group.collapsed && row.members.some(i => i.taskId !== null && highlightTaskIds.has(i.taskId)));
+    }
+    return false;
+  };
+  const highlightKey = highlightTaskIds?.size ? [...highlightTaskIds].sort((a, b) => a - b).join(',') : '';
+  const revealedFor = useRef('');
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!highlightKey || revealedFor.current === highlightKey || !el) return;
+    const index = rows.findIndex(isHighlighted);
+    if (index < 0) return; // rows not rendered yet; runs again when they are
+    revealedFor.current = highlightKey;
+    const box = measureLayout()[index];
+    const visibleH = el.clientHeight - headerH;
+    let top = el.scrollTop;
+    if (box.top < el.scrollTop || box.top + box.height > el.scrollTop + visibleH) top = Math.max(0, box.top - visibleH / 3);
+    let left = el.scrollLeft;
+    const row = rows[index];
+    if (row.kind === 'item' && row.item.segments.length) {
+      const x = col(row.item.segments[0].start) * WEEK_W;
+      if (x < el.scrollLeft || x + WEEK_W > el.scrollLeft + el.clientWidth - leftW) left = Math.max(0, x - 2 * WEEK_W);
+    }
+    el.scrollTo({ top, left, behavior: 'smooth' });
+  }, [highlightKey, rows, layout]);
+
   const drag = usePointerDrag(scrollRef, () => ({ left: leftW, top: headerH }));
+
+  /** Real row boxes (expanded rows are taller); falls back to the nominal layout before render. */
+  const measureLayout = () => {
+    const els = bodyRef.current ? [...bodyRef.current.querySelectorAll<HTMLElement>(':scope > [data-row]')] : [];
+    return els.length === latest.current.rows.length
+      ? els.map(el => ({ top: el.offsetTop, height: el.offsetHeight }))
+      : latest.current.layout;
+  };
+
+  // ── Title column resize ───────────────────────────────────────────────────
+  const saveTitleWidth = (width: number) => {
+    if (width === planning.titleColumnWidth) { setLiveTitleW(null); return; }
+    // Keep the live width until the save settles so the column never jumps back.
+    updatePlanning.mutate({ id: planning.id, data: { titleColumnWidth: width } }, { onSettled: () => setLiveTitleW(null) });
+  };
+  const onResizePointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startW = cols.title;
+    let width = startW;
+    const move = (ev: PointerEvent) => {
+      width = Math.max(MIN_TITLE_W, Math.min(MAX_TITLE_W, Math.round(startW + ev.clientX - startX)));
+      setLiveTitleW(width);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      saveTitleWidth(width);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
 
   /** Week index under a viewport X, clamped to the visible weeks. */
   const weekAt = (clientX: number) => {
@@ -190,19 +291,52 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
   const segRef = useRef<SegmentDrag | null>(null);
   const setSegDrag = (next: SegmentDrag | null) => { segRef.current = next; setSegDragState(next); };
 
+  /** Tells the page a linked task's deadline moved, with an undo for the bar change and the deadline. */
+  const reportSync = (itemId: number, sync: DeadlineSync | null, segmentId: string, previous: PlanningSegment | null) => {
+    if (!sync) return;
+    const item = latest.current.planning.items.find(i => i.id === itemId);
+    onDeadlineSynced?.({
+      title: tasksById.get(sync.taskId)?.title ?? item?.title ?? 'task',
+      to: sync.to,
+      undo: () => revertSegment.mutate({ planningId: planning.id, itemId, segmentId, segment: previous, deadline: sync.from }),
+    });
+  };
+  const ignore = () => {}; // failures are rolled back by the mutation hooks
+
   const commitSegment = (cancelled: boolean) => {
     const d = segRef.current;
     setSegDrag(null);
     if (cancelled || !d) return;
-    const { startDate } = latest.current.planning;
+    const { startDate, items } = latest.current.planning;
     const range = { start: weekMonday(startDate, d.preview.start), end: weekMonday(startDate, d.preview.end) };
     if (d.mode === 'create') {
-      addSegment.mutate({ planningId: planning.id, itemId: d.itemId, segment: { id: newSegmentId(), ...range, color: d.color } });
+      const id = newSegmentId();
+      addSegment.mutateAsync({ planningId: planning.id, itemId: d.itemId, segment: { id, ...range, color: d.color } })
+        .then(res => reportSync(d.itemId, res.deadlineSync, id, null), ignore);
     } else if (!d.moved) {
       // A click without dragging opens the bar's menu (also the touch path).
       setMenu({ itemId: d.itemId, segmentId: d.segmentId!, x: d.x, y: d.y });
     } else if (d.preview.start !== d.origin.start || d.preview.end !== d.origin.end) {
-      updateSegment.mutate({ planningId: planning.id, itemId: d.itemId, segmentId: d.segmentId!, data: range });
+      const previous = items.find(i => i.id === d.itemId)?.segments.find(s => s.id === d.segmentId) ?? null;
+      updateSegment.mutateAsync({ planningId: planning.id, itemId: d.itemId, segmentId: d.segmentId!, data: range })
+        .then(res => reportSync(d.itemId, res.deadlineSync, d.segmentId!, previous), ignore);
+    }
+  };
+
+  /** Manual fixes for a deadline outside the bar: local only, they never move the deadline. */
+  const alignBar = (item: PlanningItem, issue: DeadlineIssue) => {
+    if (issue.kind === 'outside') {
+      // Same no-overlap clamp as dragging, should another bar sit in the way.
+      const span = spanOf(issue.segment);
+      const target = alignedToDeadline(issue.segment, issue.deadline);
+      const gap = freeGap(item.segments.filter(s => s.id !== issue.segment.id).map(spanOf), span.start, span.end);
+      const placed = clampMove(span, col(target.end) - span.end, gap);
+      const { startDate } = planning;
+      updateSegment.mutate({ planningId: planning.id, itemId: item.id, segmentId: issue.segment.id,
+        data: { start: weekMonday(startDate, placed.start), end: weekMonday(startDate, placed.end) }, syncDeadline: false });
+    } else {
+      const week = mondayOf(issue.deadline);
+      addSegment.mutate({ planningId: planning.id, itemId: item.id, segment: { id: newSegmentId(), start: week, end: week, color: brushColor }, syncDeadline: false });
     }
   };
 
@@ -284,7 +418,8 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
 
   /** Drop target for a pointer at body-relative `y`. */
   const dropAt = (y: number, key: EntryKey): Omit<RowDrag, 'key'> => {
-    const { planning: p, rows: rs, layout: ls } = latest.current;
+    const { planning: p, rows: rs } = latest.current;
+    const ls = measureLayout();
     let i = ls.findIndex(l => y < l.top + l.height);
     if (i === -1) i = rs.length - 1;
     const row = rs[i];
@@ -362,8 +497,18 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
   const segmentBox = (span: WeekSpan) => ({ left: span.start * WEEK_W, width: (span.end - span.start + 1) * WEEK_W });
 
   const removeGroup = (group: PlanningGroup, count: number) => {
-    if (count === 0) deleteGroup.mutate({ planningId: planning.id, id: group.id, mode: 'deleteItems' });
-    else setPendingGroupDelete({ group, count });
+    if (count > 0) { setPendingGroupDelete({ group, count }); return; }
+    deleteGroup.mutate({ planningId: planning.id, id: group.id, mode: 'deleteItems' });
+    if (group.taskId !== null) onLinkedRemoved?.(1);
+  };
+  const confirmGroupDelete = (mode: 'moveToRoot' | 'deleteItems') => {
+    if (!pendingGroupDelete) return;
+    const { group } = pendingGroupDelete;
+    const removedLinks = (group.taskId !== null ? 1 : 0)
+      + (mode === 'deleteItems' ? planning.items.filter(i => i.groupId === group.id && i.taskId !== null).length : 0);
+    deleteGroup.mutate({ planningId: planning.id, id: group.id, mode });
+    setPendingGroupDelete(null);
+    if (removedLinks > 0) onLinkedRemoved?.(removedLinks);
   };
 
   const menuItem = menu ? planning.items.find(i => i.id === menu.itemId) : undefined;
@@ -379,8 +524,25 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
           <div className={`sticky left-0 z-30 flex items-end ${panelBg} border-r border-gray-200 dark:border-zinc-700`} style={{ width: leftW }}>
             {(['Title', 'Owner', isMobile ? '%' : 'Progress'] as const).map((label, i) => (
               <div key={label} style={{ width: [cols.title, cols.owner, cols.progress][i] }}
-                className={`px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400 truncate ${i ? colBorder : ''}`}>
-                {label}
+                className={`relative self-stretch flex items-end px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400 ${i ? colBorder : ''}`}>
+                <span className="truncate">{label}</span>
+                {i === 0 && !isMobile && (
+                  <div role="separator" aria-orientation="vertical" aria-label="Resize the Title column" tabIndex={0}
+                    aria-valuemin={MIN_TITLE_W} aria-valuemax={MAX_TITLE_W} aria-valuenow={cols.title}
+                    title="Drag to resize (double-click to reset)"
+                    onPointerDown={onResizePointerDown}
+                    onDoubleClick={() => saveTitleWidth(DESKTOP_COLS.title)}
+                    onKeyDown={e => {
+                      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                      e.preventDefault();
+                      const width = Math.max(MIN_TITLE_W, Math.min(MAX_TITLE_W, cols.title + (e.key === 'ArrowRight' ? 20 : -20)));
+                      setLiveTitleW(width);
+                      saveTitleWidth(width);
+                    }}
+                    className="group/resize absolute -right-1.5 top-0 bottom-0 w-3 z-10 cursor-col-resize touch-none flex justify-center focus-visible:outline-none">
+                    <span className={`w-0.5 h-full ${liveTitleW !== null ? 'bg-teal-500' : 'group-hover/resize:bg-teal-400 group-focus-visible/resize:bg-teal-500'}`} />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -445,10 +607,12 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
               const summary = spans.length
                 ? segmentBox({ start: Math.min(...spans.map(s => s.start)), end: Math.max(...spans.map(s => s.end)) })
                 : null;
+              const lit = isHighlighted(row);
+              const groupTask = g.taskId !== null ? tasksById.get(g.taskId) ?? null : null;
               return (
-                <div key={`g${g.id}`} className={`group flex ${rowBorder} ${pending || dragged ? 'opacity-40' : ''}`} style={{ height: ROW_H + GROUP_GAP }}>
-                  <div className={`sticky left-0 z-10 flex items-center gap-0.5 px-0.5 ${panelBg} border-r border-gray-200 dark:border-zinc-700`}
-                    style={{ width: leftW, paddingTop: GROUP_GAP }}>
+                <div key={`g${g.id}`} data-row={`g${g.id}`} className={`group flex ${rowBorder} transition-colors duration-700 ${lit ? highlightRow : ''} ${pending || dragged ? 'opacity-40' : ''}`} style={{ minHeight: ROW_H + GROUP_GAP }}>
+                  <div className={`sticky left-0 z-10 flex items-center gap-0.5 px-0.5 transition-colors duration-700 ${lit ? highlightPanel : panelBg} border-r border-gray-200 dark:border-zinc-700`}
+                    style={{ width: leftW, paddingTop: GROUP_GAP + 2, paddingBottom: 2 }}>
                     <Grip disabled={pending || filtering} label={`Reorder group ${g.name}`} hint={reorderHint}
                       onPointerDown={e => onGripPointerDown(e, { kind: 'group', id: g.id })} />
                     <button type="button" disabled={pending} aria-expanded={!g.collapsed}
@@ -459,9 +623,17 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
-                    <InlineText value={g.name} required disabled={pending} ariaLabel="Group name"
-                      onCommit={name => updateGroup.mutate({ planningId: planning.id, id: g.id, data: { name } })}
-                      className="text-xs font-bold uppercase tracking-wide text-gray-800 dark:text-zinc-100" inputClassName="text-xs font-bold uppercase" />
+                    {groupTask && (
+                      <DoneBox checked={groupTask.status === 'done'} disabled={pending} label={`Mark task ${groupTask.title} done`}
+                        onChange={done => onToggleTaskDone(groupTask, done)} />
+                    )}
+                    {/* A group made from a task shows (and renames) the live task title. */}
+                    <span className={`min-w-0 flex ${groupTask?.status === 'done' ? 'opacity-60' : ''}`}>
+                      <InlineText value={groupTask?.title ?? g.name} required disabled={pending} ariaLabel="Group name"
+                        mode="name" expanded={isExpanded(`g${g.id}`)} onToggleExpand={() => toggleExpanded(`g${g.id}`)}
+                        onCommit={name => updateGroup.mutate({ planningId: planning.id, id: g.id, data: { name } })}
+                        className="text-xs font-bold uppercase tracking-wide text-gray-800 dark:text-zinc-100" inputClassName="text-xs font-bold uppercase" />
+                    </span>
                     <span className="text-xs text-gray-400 dark:text-zinc-500 flex-shrink-0 tabular-nums">{row.total}</span>
                     {!pending && (
                       <button type="button" onClick={() => removeGroup(g, row.total)} aria-label={`Delete group ${g.name}`} title="Delete group"
@@ -473,7 +645,7 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
                   <div className="relative" style={{ width: timelineW, paddingTop: GROUP_GAP }}>
                     {summary && (
                       <div aria-hidden className="absolute h-1.5 rounded-full bg-gray-400/80 dark:bg-zinc-500"
-                        style={{ left: summary.left + 2, width: summary.width - 4, top: GROUP_GAP + ROW_H / 2 - 3 }} />
+                        style={{ left: summary.left + 2, width: summary.width - 4, top: `calc(50% + ${GROUP_GAP / 2 - 3}px)` }} />
                     )}
                   </div>
                 </div>
@@ -483,11 +655,27 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
             if (row.kind === 'item') {
               const item = row.item;
               const link = resolvePlanningLink(item, tasksById);
+              const issue = deadlineIssue(item, deadlineSyncTask(item, tasksById));
+              // Done: the linked task or subtask, or 100% for a standalone item. A subtask row also
+              // counts as done (100%, as before) when its parent task is done; its box is then locked.
+              const parentDone = !!link?.subtask && link.task.status === 'done';
+              const done = link ? parentDone || (link.subtask ?? link.task).status === 'done' : item.progress === 100;
+              const toggleDone = (next: boolean) => {
+                if (link?.subtask) onToggleSubtaskDone(link.task.id, link.subtask.id, next);
+                else if (link) onToggleTaskDone(link.task, next);
+                else updateItem.mutate({ planningId: planning.id, id: item.id, data: next
+                  ? { progress: 100, progressBeforeDone: item.progress }
+                  : { progress: item.progressBeforeDone ?? 0, progressBeforeDone: null } });
+              };
               return (
-                <ItemRow key={`i${item.id}`} item={item} nested={row.nested} link={link} dragged={dragged}
+                <ItemRow key={`i${item.id}`} item={item} nested={row.nested} link={link} dragged={dragged} highlighted={isHighlighted(row)}
+                  expanded={isExpanded(`i${item.id}`)} onToggleExpand={() => toggleExpanded(`i${item.id}`)}
                   linked={item.taskId != null && (link != null || tasksLoading)}
                   title={link ? planningItemTitle(item, tasksById) : item.title}
                   progress={planningItemProgress(item, tasksById)}
+                  done={done} doneDisabled={parentDone || (item.taskId !== null && !link && tasksLoading)} onToggleDone={toggleDone}
+                  doneHint={parentDone ? 'Done because the parent task is done' : undefined}
+                  issue={issue} onFixIssue={() => issue && alignBar(item, issue)}
                   cols={cols} leftW={leftW} timelineW={timelineW} ownersListId={ownersListId}
                   spanOf={spanOf} segmentBox={segmentBox}
                   drag={segDrag?.itemId === item.id ? segDrag : null}
@@ -498,14 +686,17 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
                   onSegmentContextMenu={(e, s) => onSegmentContextMenu(e, item, s)}
                   onEditTask={onEditTask}
                   onUpdate={data => updateItem.mutate({ planningId: planning.id, id: item.id, data })}
-                  onDelete={() => deleteItem.mutate({ planningId: planning.id, id: item.id })} />
+                  onDelete={() => {
+                    deleteItem.mutate({ planningId: planning.id, id: item.id });
+                    if (item.taskId !== null) onLinkedRemoved?.(1);
+                  }} />
               );
             }
 
             const addItem = (groupId: number | null) => (title: string) =>
               createItem.mutate({ planningId: planning.id, data: { title, groupId } });
             return (
-              <div key={row.kind === 'add-item' ? `a${row.groupId}` : 'add-root'} className="flex" style={{ height: ADD_ROW_H }}>
+              <div key={row.kind === 'add-item' ? `a${row.groupId}` : 'add-root'} data-row="add" className="flex" style={{ height: ADD_ROW_H }}>
                 <div className={`sticky left-0 z-10 flex items-center gap-1 ${panelBg} border-r border-gray-200 dark:border-zinc-700`}
                   style={{ width: leftW, paddingLeft: row.kind === 'add-item' ? NEST_INDENT + 16 : 4 }}>
                   {row.kind === 'add-item' ? (
@@ -547,7 +738,11 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
       {menu && menuItem && menuSegment && (
         <SegmentMenu segment={menuSegment} legend={planning.legend} x={menu.x} y={menu.y} onClose={() => setMenu(null)}
           onColor={color => updateSegment.mutate({ planningId: planning.id, itemId: menuItem.id, segmentId: menuSegment.id, data: { color } })}
-          onDelete={() => deleteSegment.mutate({ planningId: planning.id, itemId: menuItem.id, segmentId: menuSegment.id })} />
+          onDelete={() => {
+            const previous = menuSegment;
+            deleteSegment.mutateAsync({ planningId: planning.id, itemId: menuItem.id, segmentId: previous.id })
+              .then(res => reportSync(menuItem.id, res.deadlineSync, previous.id, previous), ignore);
+          }} />
       )}
 
       {pendingGroupDelete && (
@@ -558,12 +753,12 @@ export function PlanningGrid({ planning, tasksById, tasksLoading, ownerFilter, o
             <>
               <button onClick={() => setPendingGroupDelete(null)} className="px-4 py-2 min-h-[44px] rounded text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
               <button
-                onClick={() => { deleteGroup.mutate({ planningId: planning.id, id: pendingGroupDelete.group.id, mode: 'moveToRoot' }); setPendingGroupDelete(null); }}
+                onClick={() => confirmGroupDelete('moveToRoot')}
                 className="px-4 py-2 min-h-[44px] rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                 Move items to root
               </button>
               <button
-                onClick={() => { deleteGroup.mutate({ planningId: planning.id, id: pendingGroupDelete.group.id, mode: 'deleteItems' }); setPendingGroupDelete(null); }}
+                onClick={() => confirmGroupDelete('deleteItems')}
                 className="px-4 py-2 min-h-[44px] rounded bg-red-600 text-white hover:bg-red-700 cursor-pointer">
                 Delete items too
               </button>
@@ -589,7 +784,16 @@ interface ItemRowProps {
   linked: boolean;           // linked to a live task (or tasks are still loading)
   title: string;
   progress: number;
+  done: boolean;
+  doneDisabled: boolean;
+  doneHint?: string;
+  onToggleDone: (done: boolean) => void;
+  issue: DeadlineIssue | null;
+  onFixIssue: () => void;
   dragged: boolean;
+  highlighted: boolean;
+  expanded: boolean;
+  onToggleExpand: () => void;
   cols: typeof DESKTOP_COLS;
   leftW: number;
   timelineW: number;
@@ -609,7 +813,7 @@ interface ItemRowProps {
 }
 
 function ItemRow({
-  item, nested, link, linked, title, progress, dragged, cols, leftW, timelineW, ownersListId, spanOf, segmentBox, drag,
+  item, nested, link, linked, title, progress, done, doneDisabled, doneHint, onToggleDone, issue, onFixIssue, dragged, highlighted, expanded, onToggleExpand, cols, leftW, timelineW, ownersListId, spanOf, segmentBox, drag,
   reorderDisabled, reorderHint, onGripPointerDown, onTimelinePointerDown, onSegmentPointerDown, onSegmentContextMenu, onEditTask, onUpdate, onDelete,
 }: ItemRowProps) {
   const pending = item.id < 0;
@@ -620,16 +824,17 @@ function ItemRow({
     return () => clearTimeout(t);
   }, [confirming]);
 
-  const dimmed = linked && progress === 100;
+  const dimmed = done || (linked && progress === 100);
   const progressHelp = link?.subtask
     ? 'Follows the linked subtask: 100% when it is done, otherwise 0%. Edit the task to change it.'
     : 'Computed from the linked task: 100% when done, otherwise the share of completed subtasks. Edit the task to change it.';
 
   return (
-    <div className={`group flex ${rowBorder} ${pending || dragged ? 'opacity-40' : ''}`} style={{ height: ROW_H }}>
-      <div className={`sticky left-0 z-10 flex items-stretch ${panelBg} group-hover:bg-gray-50 dark:group-hover:bg-[#131316] border-r border-gray-200 dark:border-zinc-700`} style={{ width: leftW }}>
-        <div className="flex items-center gap-0.5 min-w-0 pr-1" style={{ width: cols.title, paddingLeft: nested ? NEST_INDENT - 14 : 2 }}>
+    <div data-row={`i${item.id}`} className={`group flex ${rowBorder} transition-colors duration-700 ${highlighted ? highlightRow : ''} ${pending || dragged ? 'opacity-40' : ''}`} style={{ minHeight: ROW_H }}>
+      <div className={`sticky left-0 z-10 flex items-stretch transition-colors duration-700 ${highlighted ? highlightPanel : `${panelBg} group-hover:bg-gray-50 dark:group-hover:bg-[#131316]`} border-r border-gray-200 dark:border-zinc-700`} style={{ width: leftW }}>
+        <div className={`flex items-center gap-0.5 min-w-0 pr-1 ${expanded ? 'py-1' : ''}`} style={{ width: cols.title, paddingLeft: nested ? NEST_INDENT - 14 : 2 }}>
           <Grip disabled={pending || reorderDisabled} label={`Reorder ${title}`} hint={reorderHint} onPointerDown={onGripPointerDown} />
+          <DoneBox checked={done} disabled={pending || doneDisabled} label={`Mark ${title} done`} hint={doneHint} onChange={onToggleDone} />
           <div className={`flex items-center gap-1 min-w-0 flex-1 ${dimmed ? 'opacity-60' : ''}`}>
             {linked ? (
               <>
@@ -640,13 +845,18 @@ function ItemRow({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                   </svg>
                 </button>
-                <span className="truncate text-sm text-gray-800 dark:text-zinc-100" title={title}>{title}</span>
+                {/* Renaming a linked row renames the real task (or subtask) too. */}
+                <InlineText value={title} required disabled={pending || !link} ariaLabel="Task title" onCommit={t => onUpdate({ title: t })}
+                  mode="name" expanded={expanded} onToggleExpand={onToggleExpand}
+                  className="text-sm text-gray-800 dark:text-zinc-100" inputClassName="text-sm" />
               </>
             ) : (
               <InlineText value={item.title} required disabled={pending} ariaLabel="Item title" onCommit={t => onUpdate({ title: t })}
+                mode="name" expanded={expanded} onToggleExpand={onToggleExpand}
                 className="text-sm text-gray-800 dark:text-zinc-100" inputClassName="text-sm" />
             )}
           </div>
+          {issue && !pending && <DeadlineIssueButton issue={issue} onFix={onFixIssue} />}
           {!pending && (
             <button type="button"
               onClick={() => (confirming ? onDelete() : setConfirming(true))}
@@ -687,10 +897,10 @@ function ItemRow({
               onPointerDown={e => onSegmentPointerDown(e, s, 'move')}
               onContextMenu={e => onSegmentContextMenu(e, s)}
               title={drag ? undefined : `${title}: ${formatPlanningDate(s.start)} – ${formatPlanningDate(weekEnd(s.end))}. Drag to move, drag an edge to resize, click for options`}
-              className={`group/seg absolute top-1.5 bottom-1.5 rounded-sm shadow-sm touch-none
+              className={`group/seg absolute rounded-sm shadow-sm touch-none
                 ${pending ? '' : editing && drag.mode === 'move' ? 'cursor-grabbing' : 'cursor-grab'}
                 ${editing ? 'z-10 ring-2 ring-gray-900/40 dark:ring-white/60' : ''}`}
-              style={{ left: box.left + 2, width: box.width - 4, backgroundColor: s.color }}>
+              style={{ left: box.left + 2, width: box.width - 4, top: '50%', height: BAR_H, marginTop: -BAR_H / 2, backgroundColor: s.color }}>
               {!pending && (['start', 'end'] as const).map(edge => (
                 <div key={edge} onPointerDown={e => onSegmentPointerDown(e, s, edge)}
                   className={`absolute top-0 bottom-0 w-2 cursor-ew-resize rounded-sm group-hover/seg:bg-black/15 ${edge === 'start' ? 'left-0' : 'right-0'}`} />
@@ -701,12 +911,20 @@ function ItemRow({
         {drag?.mode === 'create' && (() => {
           const box = segmentBox(drag.preview);
           return (
-            <div aria-hidden className="absolute top-1.5 bottom-1.5 rounded-sm opacity-70 ring-2 ring-gray-900/30 dark:ring-white/50 pointer-events-none"
-              style={{ left: box.left + 2, width: box.width - 4, backgroundColor: drag.color }} />
+            <div aria-hidden className="absolute rounded-sm opacity-70 ring-2 ring-gray-900/30 dark:ring-white/50 pointer-events-none"
+              style={{ left: box.left + 2, width: box.width - 4, top: '50%', height: BAR_H, marginTop: -BAR_H / 2, backgroundColor: drag.color }} />
           );
         })()}
       </div>
     </div>
+  );
+}
+
+function DoneBox({ checked, disabled, label, hint, onChange }: { checked: boolean; disabled: boolean; label: string; hint?: string; onChange: (done: boolean) => void }) {
+  return (
+    <input type="checkbox" checked={checked} disabled={disabled} aria-label={label} title={hint ?? (checked ? 'Mark as not done' : 'Mark as done')}
+      onChange={e => onChange(e.target.checked)}
+      className="w-3.5 h-3.5 mx-0.5 flex-shrink-0 accent-teal-600 cursor-pointer disabled:cursor-not-allowed" />
   );
 }
 

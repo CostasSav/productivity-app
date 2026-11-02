@@ -27,8 +27,8 @@ test('weekMonday steps whole weeks', () => {
 });
 
 const item = (id: number, groupId: number | null, order: number): PlanningItem =>
-  ({ id, planningId: 1, groupId, taskId: null, subtaskId: null, title: `i${id}`, owner: null, progress: 0, order, segments: [] });
-const group = (id: number, order: number): PlanningGroup => ({ id, planningId: 1, name: `g${id}`, order, collapsed: false });
+  ({ id, planningId: 1, groupId, taskId: null, subtaskId: null, title: `i${id}`, owner: null, progress: 0, progressBeforeDone: null, order, segments: [] });
+const group = (id: number, order: number): PlanningGroup => ({ id, planningId: 1, taskId: null, name: `g${id}`, order, collapsed: false });
 // Root: i1(0) g10(1) i2(2) g20(3); g10: i3(0) i4(1); g20: empty
 const plan = { groups: [group(10, 1), group(20, 3)], items: [item(1, null, 0), item(2, null, 2), item(3, 10, 0), item(4, 10, 1)] };
 
@@ -55,4 +55,32 @@ test('group moves stay at the root; no-op drops return null', () => {
   assert.equal(computeReorder(plan, { kind: 'item', id: 3 }, { groupId: 10, before: { kind: 'item', id: 4 } }), null); // already there
   assert.equal(computeReorder(plan, { kind: 'item', id: 4 }, { groupId: 10, before: null }), null);
   assert.equal(computeReorder(plan, { kind: 'item', id: 3 }, { groupId: 10, before: { kind: 'item', id: 3 } }), null);
+});
+
+// ── Deadline sync helpers (same cases as the server tests) ────────────────────
+import { alignedToDeadline, deadlineIssue, formatWeekdayDayMonth, syncedDeadline } from '../src/utils/planning';
+import type { Task } from '../src/types';
+
+test('syncedDeadline mirrors the server rule', () => {
+  assert.equal(syncedDeadline('2026-11-12', '2026-11-09', '2026-11-23'), '2026-11-26');
+  assert.equal(syncedDeadline('2026-11-12', '2026-11-09', '2026-11-02'), '2026-11-05');
+  assert.equal(syncedDeadline(null, '2026-11-09', '2026-11-16'), '2026-11-20');
+  assert.equal(syncedDeadline('2026-11-12', null, '2026-12-07'), '2026-12-10');
+  assert.equal(syncedDeadline('2026-11-12', null, '2026-11-09'), undefined);
+  assert.equal(syncedDeadline('2026-11-12', '2026-11-09', '2026-11-09'), undefined);
+  assert.equal(syncedDeadline('2026-11-12', '2026-11-09', null), undefined);
+});
+
+test('deadline mismatch and align', () => {
+  const task = { id: 1, deadline: '2026-11-20' } as Task;
+  const withBars = (...ranges: [string, string][]) =>
+    ({ ...item(1, null, 0), taskId: 1, segments: ranges.map(([start, end], i) => ({ id: `s${i}`, start, end, color: '#000' })) });
+  assert.equal(deadlineIssue(withBars(['2026-11-16', '2026-11-16']), task), null);          // Fri inside the bar's week
+  assert.equal(deadlineIssue(withBars(['2026-11-09', '2026-11-16'], ['2026-10-05', '2026-10-05']), task), null); // last = latest end
+  const outside = deadlineIssue(withBars(['2026-11-02', '2026-11-09']), task);
+  assert.equal(outside?.kind, 'outside');
+  assert.deepEqual(alignedToDeadline((outside as { segment: never }).segment, '2026-11-20'), { start: '2026-11-09', end: '2026-11-16' });
+  assert.deepEqual(deadlineIssue(withBars(), task), { kind: 'noBar', deadline: '2026-11-20' });
+  assert.equal(deadlineIssue(withBars(), { id: 1, deadline: null } as Task), null);
+  assert.equal(formatWeekdayDayMonth('2026-12-18'), 'Fri 18/12');
 });

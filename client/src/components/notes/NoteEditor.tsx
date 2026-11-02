@@ -1,6 +1,9 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import type { Note, ExtractedTask, SummaryResult, Priority, Section } from '../../types';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api';
+import { queryKeys } from '../../lib/queryKeys';
+import { invalidateAllMissingTasks } from '../../hooks/usePlannings';
 import { Spinner } from '../ui/Spinner';
 import { Modal } from '../ui/Modal';
 import { SectionSelector } from '../sections/SectionSelector';
@@ -149,6 +152,7 @@ function nodeToMarkdown(node: Node, depth: number): string {
 }
 
 export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdated, onCreateSection }: NoteEditorProps) {
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [sectionId, setSectionId] = useState<number | null>(note.section_id);
@@ -230,6 +234,8 @@ export function NoteEditor({ note, sections, onUpdate, onTasksAdded, onNoteUpdat
 
   const handleConfirmTasks = async (tasks: ExtractedTask[]) => {
     await api.ai.confirmTasks(note.id, tasks);
+    queryClient.invalidateQueries({ queryKey: queryKeys.tasks });
+    invalidateAllMissingTasks(queryClient);
     setExtractedTasks(null);
     onTasksAdded();
     showToast(`${tasks.length} task${tasks.length !== 1 ? 's' : ''} added`);

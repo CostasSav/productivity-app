@@ -1,4 +1,4 @@
-import type { PlanningDetail, PlanningItem, PlanningReorder, SubTask, Task } from '../types';
+import type { PlanningDetail, PlanningItem, PlanningReorder, PlanningSegment, SubTask, Task } from '../types';
 
 // Planning items are "linked but independent": a link is only read, never
 // written. A taskId that no longer resolves behaves exactly like null.
@@ -214,4 +214,58 @@ export function computeReorder(planning: Pick<PlanningDetail, 'groups' | 'items'
     groups: ordered.flatMap((e, order) => (e.kind === 'group' ? [{ id: e.id, order }] : [])),
     items: ordered.flatMap((e, order) => (e.kind === 'item' ? [{ id: e.id, order, groupId: target.groupId }] : [])),
   };
+}
+
+// ── Planning <-> task deadline (mirrors server/src/db/planning.ts) ────────────
+
+/** Monday of the latest segment end, or null without segments. */
+export function lastSegmentEnd(segments: PlanningSegment[]): string | null {
+  return segments.reduce<string | null>((max, s) => (max === null || s.end > max ? s.end : max), null);
+}
+
+/**
+ * New task deadline after the last end week moved from `before` to `after`
+ * (undefined = no change). Same rule as the server, used for optimistic updates.
+ */
+export function syncedDeadline(current: string | null, before: string | null, after: string | null): string | undefined {
+  if (after === null || after === before) return undefined;
+  const day = current && /^\d{4}-\d{2}-\d{2}/.test(current) ? current.slice(0, 10) : null;
+  const next = day ? addDays(day, weeksBetween(before ?? mondayOf(day), after) * 7) : addDays(after, 4);
+  return next === day ? undefined : next;
+}
+
+/** Only items linked to a whole task (not a subtask) take part in deadline sync. */
+export function deadlineSyncTask(item: PlanningItem, tasksById: Map<number, Task>): Task | null {
+  if (item.taskId === null || item.subtaskId !== null) return null;
+  return tasksById.get(item.taskId) ?? null;
+}
+
+export type DeadlineIssue =
+  | { kind: 'outside'; deadline: string; segment: PlanningSegment }
+  | { kind: 'noBar'; deadline: string };
+
+/** Task deadline outside the last bar's weeks, or a deadline with no bar at all. Never fixed automatically. */
+export function deadlineIssue(item: PlanningItem, task: Task | null): DeadlineIssue | null {
+  const deadline = task?.deadline?.slice(0, 10);
+  if (!task || !deadline || !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) return null;
+  if (!item.segments.length) return { kind: 'noBar', deadline };
+  const last = item.segments.reduce((a, b) => (b.end > a.end ? b : a));
+  return deadline < last.start || deadline > weekEnd(last.end) ? { kind: 'outside', deadline, segment: last } : null;
+}
+
+/** The segment moved, keeping its length, so it ends on the deadline's week. */
+export function alignedToDeadline(segment: PlanningSegment, deadline: string): { start: string; end: string } {
+  const end = mondayOf(deadline);
+  return { start: addDays(end, -7 * weeksBetween(segment.start, segment.end)), end };
+}
+
+/** "18/12" */
+export function formatDayMonth(day: string): string {
+  return `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+}
+
+/** "Fri 18/12" */
+export function formatWeekdayDayMonth(day: string): string {
+  const weekday = new Date(`${day}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+  return `${weekday} ${formatDayMonth(day)}`;
 }
