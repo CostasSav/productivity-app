@@ -1,0 +1,205 @@
+import { useEffect, useRef, useState } from 'react';
+import { useUpdatePlanning } from '../../hooks/usePlannings';
+import { useMobile } from '../../hooks/useMobile';
+import { InlineText } from './InlineText';
+import { mondayOf, formatPlanningRange } from '../../utils/planning';
+import type { PlanningDetail, PlanningLegendEntry, Section } from '../../types';
+
+export const ALL_OWNERS = '__all__';
+export const UNASSIGNED = '__none__';
+
+const MAX_WEEKS = 520;
+const LEGEND_PALETTE = ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ef4444', '#eab308', '#14b8a6', '#64748b'];
+
+const fieldCls = 'border rounded px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 [color-scheme:light] dark:[color-scheme:dark]';
+const labelCls = 'text-xs font-medium text-gray-500 dark:text-gray-400';
+const stepBtn = 'w-7 h-7 flex items-center justify-center rounded border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/[0.06] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer';
+
+interface PlanningToolbarProps {
+  planning: PlanningDetail;
+  section?: Section;
+  owners: string[];
+  ownerFilter: string;
+  onOwnerFilterChange: (value: string) => void;
+  brush: number;
+  onBrushChange: (index: number) => void;
+  onBack: () => void;
+}
+
+export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onBack }: PlanningToolbarProps) {
+  const updatePlanning = useUpdatePlanning();
+  const isMobile = useMobile();
+  // On phones the controls fold away so the timeline keeps most of the screen.
+  const [showControls, setShowControls] = useState(false);
+  const update = (data: Parameters<typeof updatePlanning.mutate>[0]['data']) => updatePlanning.mutate({ id: planning.id, data });
+
+  return (
+    <div className="flex-shrink-0 px-4 md:px-6 pt-16 md:pt-4 pb-3 border-b border-gray-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]">
+      <div className="flex items-center gap-2 min-w-0">
+        <button onClick={onBack} aria-label="All plannings" title="All plannings"
+          className="p-1 -ml-1 rounded text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer flex-shrink-0">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <InlineText value={planning.name} required ariaLabel="Planning name" onCommit={name => update({ name })}
+          className="text-xl font-bold text-gray-900 dark:text-white" inputClassName="text-xl font-bold max-w-md" />
+        <span className="hidden sm:flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
+          {section ? (
+            <><span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: section.color }} />{section.name}</>
+          ) : <span className="italic">No section</span>}
+        </span>
+        {isMobile && (
+          <button onClick={() => setShowControls(s => !s)} aria-expanded={showControls}
+            className="ml-auto flex-shrink-0 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+            {showControls ? 'Hide options' : 'Options'}
+          </button>
+        )}
+      </div>
+
+      {(!isMobile || showControls) && <div className="flex flex-wrap items-end gap-x-5 gap-y-3 mt-3">
+        <label className="flex flex-col gap-1">
+          <span className={labelCls}>Start (Monday)</span>
+          <input type="date" value={planning.startDate} className={fieldCls}
+            onChange={e => { if (e.target.value) update({ startDate: mondayOf(e.target.value) }); }} />
+        </label>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="planning-target-date" className={labelCls}>Target</label>
+          <div className="flex items-center gap-1">
+            <input id="planning-target-date" type="date" value={planning.targetDate ?? ''} className={fieldCls}
+              onChange={e => update({ targetDate: e.target.value || null })} />
+            {planning.targetDate && (
+              <button onClick={() => update({ targetDate: null })} aria-label="Clear target date" title="Clear target date"
+                className="p-1 rounded text-gray-400 hover:text-red-600 cursor-pointer">×</button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className={labelCls}>{formatPlanningRange(planning.startDate, planning.weekCount)}</span>
+          <div className="flex items-center gap-1.5">
+            <button className={stepBtn} aria-label="Remove a week" title="Remove a week" disabled={planning.weekCount <= 1}
+              onClick={() => update({ weekCount: planning.weekCount - 1 })}>−</button>
+            <span className="text-sm text-gray-700 dark:text-gray-200 tabular-nums w-16 text-center">{planning.weekCount} weeks</span>
+            <button className={stepBtn} aria-label="Add a week" title="Add a week" disabled={planning.weekCount >= MAX_WEEKS}
+              onClick={() => update({ weekCount: planning.weekCount + 1 })}>+</button>
+          </div>
+        </div>
+
+        <LegendEditor legend={planning.legend} onChange={legend => update({ legend })} />
+
+        {planning.legend.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className={labelCls}>Brush</span>
+            <div role="radiogroup" aria-label="Color for new bars"
+              title="Drag across empty weeks of a row to draw a bar in this color (long-press first on touch screens)"
+              className="flex items-center gap-1.5 min-h-[30px]">
+              {planning.legend.map((entry, i) => (
+                <button key={i} role="radio" aria-checked={i === brush} onClick={() => onBrushChange(i)}
+                  title={`Draw new bars as "${entry.label || 'Untitled'}"`} aria-label={entry.label || `Color ${i + 1}`}
+                  className={`w-6 h-6 rounded-full cursor-pointer transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500
+                    ${i === brush ? 'ring-2 ring-offset-2 ring-gray-500 dark:ring-zinc-300 dark:ring-offset-[#09090b] scale-110' : 'hover:scale-110'}`}
+                  style={{ backgroundColor: entry.color }} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <label className="flex flex-col gap-1 ml-auto">
+          <span className={labelCls}>Owner</span>
+          <select value={ownerFilter} onChange={e => onOwnerFilterChange(e.target.value)} className={fieldCls}>
+            <option value={ALL_OWNERS}>All owners</option>
+            {owners.map(o => <option key={o} value={o}>{o}</option>)}
+            <option value={UNASSIGNED}>Unassigned</option>
+          </select>
+        </label>
+      </div>}
+    </div>
+  );
+}
+
+// ── Legend ────────────────────────────────────────────────────────────────────
+
+/** <input type="color"> only accepts #rrggbb. */
+function toInputColor(color: string): string {
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
+  if (/^#[0-9a-f]{3}$/i.test(color)) return `#${[...color.slice(1)].map(c => c + c).join('')}`;
+  if (/^#[0-9a-f]{8}$/i.test(color)) return color.slice(0, 7);
+  return '#000000';
+}
+
+function LegendEditor({ legend, onChange }: { legend: PlanningLegendEntry[]; onChange: (legend: PlanningLegendEntry[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(legend);
+  const root = useRef<HTMLDivElement>(null);
+
+  // Edits stay local while the panel is open and are saved once on close,
+  // so dragging a color picker doesn't fire a request per pixel.
+  const close = () => {
+    setOpen(false);
+    const cleaned = draft.map(e => ({ ...e, label: e.label.trim() }));
+    if (JSON.stringify(cleaned) !== JSON.stringify(legend)) onChange(cleaned);
+  };
+  const latestClose = useRef(close);
+  latestClose.current = close;
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) latestClose.current(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') latestClose.current(); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const setEntry = (i: number, patch: Partial<PlanningLegendEntry>) =>
+    setDraft(d => d.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+
+  return (
+    <div ref={root} className="relative flex flex-col gap-1">
+      <span className={labelCls}>Legend</span>
+      <button
+        onClick={() => { if (open) close(); else { setDraft(legend); setOpen(true); } }}
+        aria-expanded={open}
+        className="flex items-center flex-wrap gap-x-3 gap-y-1 min-h-[30px] px-2 py-1 rounded border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 hover:border-teal-500 cursor-pointer"
+      >
+        {legend.length === 0 && <span className="text-gray-400">Add colors…</span>}
+        {legend.map((e, i) => (
+          <span key={i} className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: e.color }} />
+            {e.label || <span className="italic text-gray-400">Untitled</span>}
+          </span>
+        ))}
+        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-40 w-72 p-3 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl space-y-2">
+          {draft.map((e, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <input type="color" value={toInputColor(e.color)} aria-label={`Color for ${e.label || 'entry'}`}
+                onChange={ev => setEntry(i, { color: ev.target.value })}
+                className="w-8 h-8 p-0.5 rounded border border-gray-200 dark:border-gray-600 bg-transparent cursor-pointer flex-shrink-0" />
+              <input value={e.label} maxLength={60} placeholder="Label" aria-label="Legend label"
+                onChange={ev => setEntry(i, { label: ev.target.value })}
+                onKeyDown={ev => { if (ev.key === 'Enter') close(); }}
+                className={`${fieldCls} flex-1 min-w-0`} />
+              <button onClick={() => setDraft(d => d.filter((_, j) => j !== i))} aria-label="Remove entry" title="Remove"
+                className="p-1 rounded text-gray-400 hover:text-red-600 cursor-pointer">×</button>
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-1">
+            <button disabled={draft.length >= 20}
+              onClick={() => setDraft(d => [...d, { color: LEGEND_PALETTE[d.length % LEGEND_PALETTE.length], label: '' }])}
+              className="text-sm text-teal-600 dark:text-teal-400 hover:underline disabled:opacity-40 cursor-pointer">+ Add entry</button>
+            <button onClick={close} className="px-3 py-1 text-sm bg-teal-600 text-white rounded hover:bg-teal-700 cursor-pointer">Done</button>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500">Pick the color for new bars with the brush. Existing bars keep their color.</p>
+        </div>
+      )}
+    </div>
+  );
+}

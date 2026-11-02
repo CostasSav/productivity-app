@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTasksContext } from '../../context/TasksContext';
 import type { Section } from '../../types';
 
-type NavView = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | { type: 'section'; id: number };
+type NavView = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | 'plannings' | { type: 'section'; id: number };
 
 interface CommandPaletteProps {
   sections: Section[];
@@ -16,6 +16,7 @@ const NAV_ITEMS: { view: NavView; label: string; desc: string }[] = [
   { view: 'calendar', label: 'Calendar', desc: 'Tasks by deadline' },
   { view: 'notes',    label: 'Notes',    desc: 'Your notes' },
   { view: 'habits',   label: 'Habits',   desc: 'Habit tracker' },
+  { view: 'plannings', label: 'Project Planning', desc: 'Weekly project timelines' },
 ];
 
 type Result =

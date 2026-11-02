@@ -49,4 +49,8 @@ export const queryKeys = {
   bookLearnings: (params?: { bookId?: number; search?: string }) =>
     ['bookLearnings', params ?? {}] as const,
   bibliothecaSettings: ['bibliothecaSettings'] as const,
+
+  // Project planning
+  plannings: ['plannings'] as const,
+  planning: (id: number) => ['plannings', id] as const,
 };

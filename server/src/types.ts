@@ -234,3 +234,61 @@ export interface BookWithCounts extends Book {
   quotesCount: number;
   learningsCount: number;
 }
+
+// ── Project planning ─────────────────────────────────────────────────────────
+// Planning items are "linked but independent": they never modify real tasks.
+
+export interface PlanningLegendEntry {
+  color: string;
+  label: string;
+}
+
+export interface Planning {
+  id: number;
+  name: string;
+  sectionId: number | null;
+  startDate: string;          // YYYY-MM-DD, always a Monday
+  weekCount: number;
+  targetDate: string | null;  // YYYY-MM-DD, drives S-n countdown labels
+  highlightedWeeks: string[]; // Monday dates
+  legend: PlanningLegendEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanningGroup {
+  id: number;
+  planningId: number;
+  name: string;
+  order: number;
+  collapsed: boolean;
+}
+
+export interface PlanningSegment {
+  id: string;     // client-generatable so optimistic drags keep a stable id
+  start: string;  // Monday
+  end: string;    // Monday, inclusive
+  color: string;
+}
+
+export interface PlanningItem {
+  id: number;
+  planningId: number;
+  groupId: number | null;    // null = root level
+  taskId: number | null;     // link to a real task (parent task for subtask links)
+  subtaskId: number | null;  // subtask ids are only unique within their task
+  title: string;             // fallback snapshot for linked items
+  owner: string | null;
+  progress: number;          // 0-100, only used when unlinked
+  order: number;
+  segments: PlanningSegment[];
+}
+
+export interface PlanningSummary extends Planning {
+  itemCount: number;
+}
+
+export interface PlanningDetail extends Planning {
+  groups: PlanningGroup[];
+  items: PlanningItem[];
+}

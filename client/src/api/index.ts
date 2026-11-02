@@ -1,4 +1,4 @@
-import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, SleepEntry, SleepSettings, SleepStats, Book, BookWithCounts, BookNote, BookQuote, BookQuoteWithBook, BookLearning, BibliothecaSettings, BookStats, OpenLibraryResult, BookStatus } from '../types';
+import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, SleepEntry, SleepSettings, SleepStats, Book, BookWithCounts, BookNote, BookQuote, BookQuoteWithBook, BookLearning, BibliothecaSettings, BookStats, OpenLibraryResult, BookStatus, Planning, PlanningSummary, PlanningDetail, PlanningGroup, PlanningItem, PlanningUpdate, PlanningGroupUpdate, PlanningItemUpdate, PlanningSegment, PlanningSegmentInput, PlanningGroupDeleteMode, PlanningReorder } from '../types';
 
 interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
 interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
@@ -161,5 +161,38 @@ export const api = {
     get: () => request<BibliothecaSettings>('/api/bibliotheca-settings'),
     update: (data: Partial<BibliothecaSettings>) =>
       request<BibliothecaSettings>('/api/bibliotheca-settings', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  plannings: {
+    list: () => request<PlanningSummary[]>('/api/plannings'),
+    get: (id: number) => request<PlanningDetail>(`/api/plannings/${id}`),
+    // A sectionId imports every task of that section; startDate snaps to its Monday.
+    create: (data: { name: string; sectionId?: number | null; startDate?: string; targetDate?: string | null }) =>
+      request<PlanningDetail>('/api/plannings', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: PlanningUpdate) =>
+      request<Planning>(`/api/plannings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/api/plannings/${id}`, { method: 'DELETE' }),
+    reorder: (id: number, data: PlanningReorder) =>
+      request<void>(`/api/plannings/${id}/reorder`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
+  planningGroups: {
+    create: (data: { planningId: number; name: string; collapsed?: boolean }) =>
+      request<PlanningGroup>('/api/planning-groups', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: PlanningGroupUpdate) =>
+      request<PlanningGroup>(`/api/planning-groups/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number, mode: PlanningGroupDeleteMode) =>
+      request<void>(`/api/planning-groups/${id}?mode=${mode}`, { method: 'DELETE' }),
+  },
+  planningItems: {
+    create: (data: PlanningItemUpdate & { planningId: number }) =>
+      request<PlanningItem>('/api/planning-items', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: PlanningItemUpdate) =>
+      request<PlanningItem>(`/api/planning-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/api/planning-items/${id}`, { method: 'DELETE' }),
+    addSegment: (itemId: number, data: PlanningSegmentInput) =>
+      request<PlanningItem>(`/api/planning-items/${itemId}/segments`, { method: 'POST', body: JSON.stringify(data) }),
+    updateSegment: (itemId: number, segmentId: string, data: Partial<Omit<PlanningSegment, 'id'>>) =>
+      request<PlanningItem>(`/api/planning-items/${itemId}/segments/${encodeURIComponent(segmentId)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteSegment: (itemId: number, segmentId: string) =>
+      request<PlanningItem>(`/api/planning-items/${itemId}/segments/${encodeURIComponent(segmentId)}`, { method: 'DELETE' }),
   },
 };

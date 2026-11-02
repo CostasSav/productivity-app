@@ -10,6 +10,7 @@ import { gratitudeRouter, gratitudeSettingsRouter } from './routes/gratitude';
 import { groceryRouter, groceryStaplesRouter } from './routes/grocery';
 import { sleepRouter, sleepSettingsRouter } from './routes/sleep';
 import { booksRouter, bookNotesRouter, bookQuotesRouter, bookLearningsRouter, bibliothecaSettingsRouter } from './routes/bibliotheca';
+import { planningsRouter, planningGroupsRouter, planningItemsRouter } from './routes/plannings';
 import { db, prepareDatabase } from './db/database';
 import { readWidgetConfig, readWidgetActionConfig } from './widgets/config';
 import { readAuthConfig } from './auth/config';
@@ -41,6 +42,9 @@ app.use('/api/books', booksRouter);
 app.use('/api/book-notes', bookNotesRouter);
 app.use('/api/book-quotes', bookQuotesRouter);
 app.use('/api/book-learnings', bookLearningsRouter);
+app.use('/api/plannings', planningsRouter);
+app.use('/api/planning-groups', planningGroupsRouter);
+app.use('/api/planning-items', planningItemsRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

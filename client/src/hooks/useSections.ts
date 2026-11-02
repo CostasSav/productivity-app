@@ -66,6 +66,8 @@ export function useDeleteSection() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: SECTION_KEY });
+      // The server unlinks plannings from the deleted section.
+      queryClient.invalidateQueries({ queryKey: queryKeys.plannings });
     },
   });
 }

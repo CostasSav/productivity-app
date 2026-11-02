@@ -99,6 +99,8 @@ export function useDeleteTask() {
 
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: TASK_KEY });
+      // Linked planning items are detached (kept as standalone) server-side.
+      queryClient.invalidateQueries({ queryKey: queryKeys.plannings });
     },
   });
 }
@@ -165,6 +167,7 @@ export function useTasks() {
   const deleteSubtask = async (taskId: number, subId: number): Promise<void> => {
     const result = await api.tasks.deleteSubtask(taskId, subId);
     applySubtaskResult(result);
+    queryClient.invalidateQueries({ queryKey: queryKeys.plannings });
   };
 
   return {

@@ -266,3 +266,71 @@ export interface OpenLibraryResult {
   openLibraryKey: string | null;
   totalPages: number | null;
 }
+
+// ── Project planning ─────────────────────────────────────────────────────────
+// Planning items are "linked but independent": they never modify real tasks.
+
+export interface PlanningLegendEntry {
+  color: string;
+  label: string;
+}
+
+export interface Planning {
+  id: number;
+  name: string;
+  sectionId: number | null;
+  startDate: string;          // YYYY-MM-DD, always a Monday
+  weekCount: number;
+  targetDate: string | null;  // drives S-n countdown labels
+  highlightedWeeks: string[]; // Monday dates
+  legend: PlanningLegendEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanningGroup {
+  id: number;
+  planningId: number;
+  name: string;
+  order: number;              // shares one ordering space with root-level items
+  collapsed: boolean;
+}
+
+export interface PlanningSegment {
+  id: string;
+  start: string;              // Monday
+  end: string;                // Monday, inclusive
+  color: string;
+}
+
+export interface PlanningItem {
+  id: number;
+  planningId: number;
+  groupId: number | null;     // null = root level
+  taskId: number | null;      // parent task when subtaskId is set; null when dangling
+  subtaskId: number | null;
+  title: string;              // fallback snapshot for linked items
+  owner: string | null;
+  progress: number;           // 0-100, only used when unlinked
+  order: number;
+  segments: PlanningSegment[];
+}
+
+export interface PlanningSummary extends Planning {
+  itemCount: number;
+}
+
+export interface PlanningDetail extends Planning {
+  groups: PlanningGroup[];
+  items: PlanningItem[];
+}
+
+export type PlanningUpdate = Partial<Pick<Planning, 'name' | 'sectionId' | 'startDate' | 'weekCount' | 'targetDate' | 'highlightedWeeks' | 'legend'>>;
+export type PlanningGroupUpdate = Partial<Pick<PlanningGroup, 'name' | 'order' | 'collapsed'>>;
+export type PlanningItemUpdate = Partial<Pick<PlanningItem, 'groupId' | 'taskId' | 'subtaskId' | 'title' | 'owner' | 'progress' | 'order' | 'segments'>>;
+export type PlanningSegmentInput = Partial<PlanningSegment> & Pick<PlanningSegment, 'start' | 'end'>;
+export type PlanningGroupDeleteMode = 'deleteItems' | 'moveToRoot';
+export interface PlanningReorder {
+  groups?: { id: number; order: number }[];
+  items?: { id: number; order: number; groupId: number | null }[];
+}

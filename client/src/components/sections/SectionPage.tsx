@@ -6,6 +6,7 @@ import { NoteEditor } from '../notes/NoteEditor';
 import { useTasksContext } from '../../context/TasksContext';
 import { useNotes, useNote, useUpdateNote } from '../../hooks/useNotes';
 import { useHabits } from '../../hooks/useHabits';
+import { usePlanningsList } from '../../hooks/usePlannings';
 import { CalendarView } from '../calendar/CalendarView';
 import { isDue, localDateStr, logToLocalDate, calcCurrentStreak, getMonday, getWeekLogCount } from '../../utils/habitStats';
 
@@ -16,6 +17,7 @@ interface SectionPageProps {
   onEditSection: (id: number, name: string, color: string) => Promise<void>;
   onDeleteSection: (id: number) => Promise<void>;
   onFocusTask?: (task: Task) => void;
+  onOpenPlannings?: () => void;
 }
 
 const PALETTE = [
@@ -24,7 +26,7 @@ const PALETTE = [
   '#3b82f6', '#64748b',
 ];
 
-export function SectionPage({ section, sections, onCreateSection, onEditSection, onDeleteSection, onFocusTask }: SectionPageProps) {
+export function SectionPage({ section, sections, onCreateSection, onEditSection, onDeleteSection, onFocusTask, onOpenPlannings }: SectionPageProps) {
   const { tasks, createTask, updateTask } = useTasksContext();
   const { notes, createNote, updateNoteInList, deleteNote } = useNotes();
   const { habits, logs: habitLogs, logHabit, unlogHabit } = useHabits();
@@ -42,6 +44,8 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
   const activeTasks = sectionTasks.filter(t => t.status !== 'done');
   const sectionNotes = notes.filter(n => n.section_id === section.id);
   const sectionHabits = habits.filter(h => !h.archivedAt && h.sectionId === section.id);
+  const { data: plannings = [] } = usePlanningsList();
+  const sectionPlanningCount = plannings.filter(p => p.sectionId === section.id).length;
 
   // Habit log lookups for today
   const todayStr = localDateStr();
@@ -126,6 +130,11 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
               <span><strong className="text-gray-800 dark:text-gray-100">{sectionNotes.length}</strong> notes</span>
               {sectionHabits.length > 0 && (
                 <span><strong className="text-gray-800 dark:text-gray-100">{sectionHabits.length}</strong> habits</span>
+              )}
+              {sectionPlanningCount > 0 && (
+                <button onClick={onOpenPlannings} className="hover:text-teal-600 dark:hover:text-teal-400 hover:underline cursor-pointer">
+                  <strong className="text-gray-800 dark:text-gray-100">{sectionPlanningCount}</strong> planning{sectionPlanningCount === 1 ? '' : 's'}
+                </button>
               )}
             </div>
             <button onClick={() => setEditing(true)} className="p-1.5 text-gray-400 hover:text-teal-600 dark:text-gray-500 dark:hover:text-teal-400 rounded" title="Edit section">

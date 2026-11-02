@@ -2,7 +2,8 @@ import path from 'path';
 import { DatabaseError, JsonStore } from './jsonStore';
 import { CompletionError, calendarDay, habitZone, logDay, setHabitState, updateTaskState } from './completion';
 import { buildWidgetSnapshot, widgetCalendarDate } from '../widgets/snapshot';
-import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory, SleepEntry, SleepSettings, SleepStats, Book, BookNote, BookQuote, BookLearning, BibliothecaSettings, BookStats, BookWithCounts, BookStatus } from '../types';
+import type { Task, Note, Section, SubTask, PomodoroSession, RecurrenceType, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, GroceryCategory, SleepEntry, SleepSettings, SleepStats, Book, BookNote, BookQuote, BookLearning, BibliothecaSettings, BookStats, BookWithCounts, BookStatus, Planning, PlanningGroup, PlanningItem, PlanningDetail, PlanningSummary } from '../types';
+import * as planning from './planning';
 import { GROCERY_CATEGORIES } from '../types';
 
 const DB_PATH = process.env.DATA_DIR
@@ -27,6 +28,9 @@ interface DbData {
   bookQuotes: BookQuote[];
   bookLearnings: BookLearning[];
   bibliothecaSettings: BibliothecaSettings;
+  plannings: Planning[];
+  planningGroups: PlanningGroup[];
+  planningItems: PlanningItem[];
   _sectionSeq: number;
   _taskSeq: number;
   _noteSeq: number;
@@ -41,6 +45,9 @@ interface DbData {
   _bookNoteSeq: number;
   _bookQuoteSeq: number;
   _bookLearningSeq: number;
+  _planningSeq: number;
+  _planningGroupSeq: number;
+  _planningItemSeq: number;
 }
 
 const DEFAULT_GRATITUDE_SETTINGS: GratitudeSettings = {
@@ -63,6 +70,8 @@ const EMPTY: DbData = {
   books: [], bookNotes: [], bookQuotes: [], bookLearnings: [],
   bibliothecaSettings: { yearlyGoal: 12, currentYear: new Date().getFullYear() },
   _bookSeq: 0, _bookNoteSeq: 0, _bookQuoteSeq: 0, _bookLearningSeq: 0,
+  plannings: [], planningGroups: [], planningItems: [],
+  _planningSeq: 0, _planningGroupSeq: 0, _planningItemSeq: 0,
 };
 
 function validateDatabase(value: unknown): asserts value is DbData {
@@ -126,6 +135,13 @@ function load(): DbData {
     if (raw._bookNoteSeq === undefined) raw._bookNoteSeq = 0;
     if (raw._bookQuoteSeq === undefined) raw._bookQuoteSeq = 0;
     if (raw._bookLearningSeq === undefined) raw._bookLearningSeq = 0;
+    // Backfill project planning data
+    if (!raw.plannings) raw.plannings = [];
+    if (!raw.planningGroups) raw.planningGroups = [];
+    if (!raw.planningItems) raw.planningItems = [];
+    if (raw._planningSeq === undefined) raw._planningSeq = 0;
+    if (raw._planningGroupSeq === undefined) raw._planningGroupSeq = 0;
+    if (raw._planningItemSeq === undefined) raw._planningItemSeq = 0;
     // Backfill order field within each category
     if (Array.isArray(raw.groceryItems)) {
       const catOrders: Record<string, number> = {};
@@ -156,6 +172,14 @@ function save(data: DbData) {
 
 function now() {
   return new Date().toISOString();
+}
+
+/** Load → apply → save; a thrown PlanningError leaves the file untouched. */
+function mutate<T>(fn: (data: DbData) => T): T {
+  const data = load();
+  const result = fn(data);
+  save(data);
+  return result;
 }
 
 export function nextDeadline(deadline: string, recurrence: RecurrenceType): string {
@@ -348,6 +372,7 @@ export const db = {
     // Unlink tasks and notes from deleted section
     data.tasks = data.tasks.map(t => t.section_id === id ? { ...t, section_id: null } : t);
     data.notes = data.notes.map(n => n.section_id === id ? { ...n, section_id: null } : n);
+    planning.detachDeletedSection(data, id);
     if (data.sections.length === before) return false;
     save(data);
     return true;
@@ -417,6 +442,8 @@ export const db = {
   deleteTask(id: number): boolean {
     const data = load();
     const before = data.tasks.length;
+    // Planning items survive as standalone copies; they never delete with the task.
+    planning.detachDeletedTask(data, id);
     data.tasks = data.tasks.filter(t => t.id !== id);
     if (data.tasks.length === before) return false;
     save(data);
@@ -450,6 +477,7 @@ export const db = {
     const data = load();
     const idx = data.tasks.findIndex(t => t.id === taskId);
     if (idx === -1) return undefined;
+    planning.detachDeletedTask(data, taskId, subId);
     data.tasks[idx].subtasks = data.tasks[idx].subtasks.filter((s: SubTask) => s.id !== subId);
     data.tasks[idx].updated_at = now();
     save(data);
@@ -1147,5 +1175,54 @@ export const db = {
     data.bibliothecaSettings = { ...data.bibliothecaSettings, ...fields };
     save(data);
     return data.bibliothecaSettings;
+  },
+
+  // ── Project planning ──────────────────────────────────
+  // Validation and logic live in ./planning; these only wrap load/save.
+
+  getPlannings(): PlanningSummary[] {
+    return planning.listPlannings(load());
+  },
+  getPlanning(id: number): PlanningDetail | undefined {
+    return planning.getPlanningDetail(load(), id);
+  },
+  createPlanning(body: Record<string, unknown>): PlanningDetail {
+    return mutate(data => planning.createPlanning(data, body, now(), now().slice(0, 10)));
+  },
+  updatePlanning(id: number, body: Record<string, unknown>): Planning {
+    return mutate(data => planning.updatePlanning(data, id, body, now()));
+  },
+  deletePlanning(id: number): void {
+    mutate(data => planning.deletePlanning(data, id));
+  },
+  reorderPlanning(id: number, body: Record<string, unknown>): void {
+    mutate(data => planning.reorderPlanning(data, id, body, now()));
+  },
+  createPlanningGroup(body: Record<string, unknown>): PlanningGroup {
+    return mutate(data => planning.createGroup(data, body, now()));
+  },
+  updatePlanningGroup(id: number, body: Record<string, unknown>): PlanningGroup {
+    return mutate(data => planning.updateGroup(data, id, body, now()));
+  },
+  deletePlanningGroup(id: number, mode: unknown): void {
+    mutate(data => planning.deleteGroup(data, id, mode, now()));
+  },
+  createPlanningItem(body: Record<string, unknown>): PlanningItem {
+    return mutate(data => planning.createItem(data, body, now()));
+  },
+  updatePlanningItem(id: number, body: Record<string, unknown>): PlanningItem {
+    return mutate(data => planning.updateItem(data, id, body, now()));
+  },
+  deletePlanningItem(id: number): void {
+    mutate(data => planning.deleteItem(data, id, now()));
+  },
+  addPlanningSegment(itemId: number, body: unknown): PlanningItem {
+    return mutate(data => planning.addSegment(data, itemId, body, now()));
+  },
+  updatePlanningSegment(itemId: number, segmentId: string, body: unknown): PlanningItem {
+    return mutate(data => planning.updateSegment(data, itemId, segmentId, body, now()));
+  },
+  deletePlanningSegment(itemId: number, segmentId: string): PlanningItem {
+    return mutate(data => planning.deleteSegment(data, itemId, segmentId, now()));
   },
 };

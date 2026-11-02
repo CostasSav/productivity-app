@@ -15,6 +15,8 @@ import { Settings } from './pages/Settings';
 import { Grocery } from './pages/Grocery';
 import { Sleep } from './pages/Sleep';
 import { Bibliotheca } from './pages/Bibliotheca';
+import { Plannings } from './pages/Plannings';
+import { PlanningView } from './pages/PlanningView';
 import { useNotes, useNote, useUpdateNote } from './hooks/useNotes';
 import { useTasksContext } from './context/TasksContext';
 import { useSections } from './hooks/useSections';
@@ -29,9 +31,9 @@ const SESSION_VIEW_KEY = 'app_view';
 const SESSION_NOTE_KEY = 'app_selected_note';
 const SESSION_FOCUS_KEY = 'app_focus_task';
 
-type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | 'gratitude' | 'grocery' | 'sleep' | 'bibliotheca' | 'settings' | { type: 'section'; id: number };
+type View = 'today' | 'tasks' | 'calendar' | 'notes' | 'habits' | 'gratitude' | 'grocery' | 'sleep' | 'bibliotheca' | 'plannings' | 'settings' | { type: 'section'; id: number } | { type: 'planning'; id: number };
 
-const VALID_VIEWS = new Set(['today', 'tasks', 'calendar', 'notes', 'habits', 'gratitude', 'grocery', 'sleep', 'bibliotheca', 'settings']);
+const VALID_VIEWS = new Set(['today', 'tasks', 'calendar', 'notes', 'habits', 'gratitude', 'grocery', 'sleep', 'bibliotheca', 'plannings', 'settings']);
 
 function readSessionView(): View {
   try {
@@ -39,7 +41,7 @@ function readSessionView(): View {
     if (!raw) return 'today';
     const v = JSON.parse(raw);
     if (typeof v === 'string' && VALID_VIEWS.has(v)) return v as View;
-    if (v && typeof v === 'object' && v.type === 'section' && typeof v.id === 'number') return v as View;
+    if (v && typeof v === 'object' && (v.type === 'section' || v.type === 'planning') && typeof v.id === 'number') return v as View;
   } catch {}
   return 'today';
 }
@@ -229,8 +231,9 @@ export default function App() {
 
   const isActive = (v: View) => {
     if (typeof v === 'string' && typeof view === 'string') return v === view;
-    if (typeof v === 'object' && typeof view === 'object') return v.id === (view as any).id;
-    return false;
+    if (typeof v === 'object' && typeof view === 'object') return v.type === view.type && v.id === view.id;
+    // An open planning keeps "Project Planning" highlighted in the sidebar.
+    return v === 'plannings' && typeof view === 'object' && view.type === 'planning';
   };
 
   const navBtn = (v: View, label: string, icon: React.ReactNode) => (
@@ -298,6 +301,7 @@ export default function App() {
         {navBtn('habits',   'Habits',   <Icon d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />)}
 
         {/* Notes + Gratitude: icon-only in collapsed sidebar, else behind "More" toggle */}
+        {collapsed && navBtn('plannings', 'Project Planning', <Icon d="M3 4v16M7 6h8M10 12h10M7 18h6" />)}
         {collapsed && navBtn('notes', 'Notes', <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
         {collapsed && navBtn('gratitude', 'Gratitude', <Icon d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />)}
         {collapsed && navBtn('grocery', 'Grocery', <Icon d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />)}
@@ -328,6 +332,7 @@ export default function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
+            {moreExpanded && navBtn('plannings', 'Project Planning', <Icon d="M3 4v16M7 6h8M10 12h10M7 18h6" />)}
             {moreExpanded && navBtn('notes', 'Notes', <Icon d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />)}
             {moreExpanded && navBtn('gratitude', 'Gratitude', <Icon d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />)}
             {moreExpanded && navBtn('grocery', 'Grocery', <Icon d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />)}
@@ -515,6 +520,16 @@ export default function App() {
             <Bibliotheca />
           </div>
         )}
+        {view === 'plannings' && (
+          <div className="flex-1 overflow-y-auto animate-fade-in">
+            <Plannings onOpen={id => setView({ type: 'planning', id })} />
+          </div>
+        )}
+        {typeof view === 'object' && view.type === 'planning' && (
+          <div className="flex-1 flex flex-col overflow-hidden animate-fade-in">
+            <PlanningView key={view.id} id={view.id} onBack={() => setView('plannings')} />
+          </div>
+        )}
         {view === 'notes' && (
           <div className="flex-1 flex overflow-hidden animate-fade-in">
             {/* List panel — always visible on desktop; on mobile only when no note is open */}
@@ -567,6 +582,7 @@ export default function App() {
               key={currentSection.id} section={currentSection} sections={sections}
               onCreateSection={createSection} onEditSection={handleEditSection}
               onDeleteSection={handleDeleteSection} onFocusTask={handleFocusTask}
+              onOpenPlannings={() => setView('plannings')}
             />
           </div>
         )}
