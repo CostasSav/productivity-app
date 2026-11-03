@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMobile } from '../../hooks/useMobile';
 import {
@@ -12,10 +12,12 @@ import { InlineText } from './InlineText';
 import { SegmentMenu } from './SegmentMenu';
 import { usePointerDrag } from './usePointerDrag';
 import { ALL_OWNERS, UNASSIGNED } from './PlanningToolbar';
+import { PriorityBadge } from '../ui/Badge';
 import {
   clampCreate, clampMove, clampResize, computeReorder, containerEntries, countdownLabel, formatPlanningDate, freeGap,
   mondayOf, monthSpans, newSegmentId, nextProgressStep, planningItemProgress, planningItemTitle, planningWeeks,
   resolvePlanningLink, weekEnd, weekMonday, weeksBetween, deadlineIssue, deadlineSyncTask, alignedToDeadline,
+  groupPriority, nextGroupPriority, rootDisplayEntries, sortedModeDrop,
   type DeadlineIssue, type DropTarget, type EntryKey, type Gap, type PlanningLink, type WeekSpan,
 } from '../../utils/planning';
 import { localDateStr } from '../../utils/habitStats';
@@ -154,14 +156,41 @@ export function PlanningGrid({
     updatePlanning.mutate({ id: planning.id, data: { highlightedWeeks: next } });
   };
 
-  // ── Rows: root groups and items interleaved by their shared order ──────────
+  const [segDrag, setSegDragState] = useState<SegmentDrag | null>(null);
+  const segRef = useRef<SegmentDrag | null>(null);
+  const setSegDrag = (next: SegmentDrag | null) => { segRef.current = next; setSegDragState(next); };
+  const [rowDrag, setRowDragState] = useState<RowDrag | null>(null);
+  const rowRef = useRef<RowDrag | null>(null);
+  const setRowDrag = (next: RowDrag | null) => { rowRef.current = next; setRowDragState(next); };
+
+  // ── Group display order (sort mode) ────────────────────────────────────────
+  // Sorting only changes what is shown; group `order` (the custom order) is never written.
+  // While a bar or row is being dragged the order is frozen, so rows never jump
+  // under the pointer; the new order applies once the drag is released.
+  const sortMode = planning.groupSortMode ?? 'custom';
+  const sorted = sortMode !== 'custom';
+  const dragging = segDrag !== null || rowDrag !== null;
+  const frozenRoot = useRef<EntryKey[] | null>(null);
+  const rootEntries = useMemo(() => {
+    const live = rootDisplayEntries(planning, tasksById.values());
+    const frozen = frozenRoot.current;
+    if (!dragging || !frozen) return live;
+    // Keep the frozen positions; anything added meanwhile goes at the end.
+    const known = new Set(live.map(e => `${e.kind}${e.id}`));
+    const kept = frozen.filter(e => known.has(`${e.kind}${e.id}`));
+    const keptKeys = new Set(kept.map(e => `${e.kind}${e.id}`));
+    return [...kept, ...live.filter(e => !keptKeys.has(`${e.kind}${e.id}`))];
+  }, [planning, tasksById, dragging]);
+  if (!dragging) frozenRoot.current = rootEntries;
+
+  // ── Rows: root entries in display order, each group followed by its items ──
   const rows = useMemo(() => {
     const byGroup = new Map<number | null, PlanningItem[]>();
     [...planning.items].sort((a, b) => a.order - b.order).forEach(i => {
       byGroup.set(i.groupId, [...(byGroup.get(i.groupId) ?? []), i]);
     });
     const out: Row[] = [];
-    for (const entry of containerEntries(planning, null)) {
+    for (const entry of rootEntries) {
       if (entry.kind === 'group') {
         const group = planning.groups.find(g => g.id === entry.id)!;
         const all = byGroup.get(group.id) ?? [];
@@ -179,7 +208,27 @@ export function PlanningGrid({
     }
     out.push({ kind: 'add-root' });
     return out;
-  }, [planning, ownerFilter, filtering]);
+  }, [planning, rootEntries, ownerFilter, filtering]);
+
+  // ── Brief slide when groups change place (FLIP), so the eye can follow a re-sort ──
+  const rowTops = useRef(new Map<string, number>());
+  const groupOrderKey = rows.flatMap(r => (r.kind === 'group' ? [r.group.id] : [])).join(',');
+  const lastGroupOrder = useRef(groupOrderKey);
+  useLayoutEffect(() => {
+    const els = bodyRef.current ? [...bodyRef.current.querySelectorAll<HTMLElement>(':scope > [data-row]')] : [];
+    const tops = new Map(els.map(el => [el.dataset.row!, el.offsetTop]));
+    const moved = lastGroupOrder.current !== groupOrderKey;
+    lastGroupOrder.current = groupOrderKey;
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (moved && !reduce) {
+      for (const el of els) {
+        const before = rowTops.current.get(el.dataset.row!);
+        const delta = before === undefined ? 0 : before - el.offsetTop;
+        if (delta) el.animate?.([{ transform: `translateY(${delta}px)` }, { transform: 'translateY(0)' }], { duration: 200, easing: 'ease-out' });
+      }
+    }
+    rowTops.current = tops;
+  }, [rows]);
 
   const layout = useMemo(() => {
     let top = 0;
@@ -289,9 +338,6 @@ export function PlanningGrid({
   const spanOf = (s: PlanningSegment): WeekSpan => ({ start: col(s.start), end: col(s.end) });
 
   // ── Bars: draw, move, resize ───────────────────────────────────────────────
-  const [segDrag, setSegDragState] = useState<SegmentDrag | null>(null);
-  const segRef = useRef<SegmentDrag | null>(null);
-  const setSegDrag = (next: SegmentDrag | null) => { segRef.current = next; setSegDragState(next); };
 
   /** Tells the page a linked task's deadline moved, with an undo for the bar change and the deadline. */
   const reportSync = (itemId: number, sync: DeadlineSync | null, segmentId: string, previous: PlanningSegment | null) => {
@@ -414,9 +460,6 @@ export function PlanningGrid({
   };
 
   // ── Rows: drag by the grip to reorder / regroup ────────────────────────────
-  const [rowDrag, setRowDragState] = useState<RowDrag | null>(null);
-  const rowRef = useRef<RowDrag | null>(null);
-  const setRowDrag = (next: RowDrag | null) => { rowRef.current = next; setRowDragState(next); };
 
   /** Drop target for a pointer at body-relative `y`. */
   const dropAt = (y: number, key: EntryKey): Omit<RowDrag, 'key'> => {
@@ -481,7 +524,8 @@ export function PlanningGrid({
         const d = rowRef.current;
         setRowDrag(null);
         if (cancelled || !d?.target) return;
-        const payload = computeReorder(latest.current.planning, d.key, d.target);
+        const p = latest.current.planning;
+        const payload = computeReorder(p, d.key, sortedModeDrop(p, d.key, d.target));
         if (payload) reorder.mutate({ planningId: planning.id, ...payload });
       },
     });
@@ -611,11 +655,13 @@ export function PlanningGrid({
                 : null;
               const lit = isHighlighted(row);
               const groupTask = g.taskId !== null ? tasksById.get(g.taskId) ?? null : null;
+              const priority = groupPriority(g, tasksById);
               return (
                 <div key={`g${g.id}`} data-row={`g${g.id}`} className={`group flex ${rowBorder} transition-colors duration-700 ${lit ? highlightRow : ''} ${pending || dragged ? 'opacity-40' : ''}`} style={{ minHeight: ROW_H + GROUP_GAP }}>
                   <div className={`sticky left-0 z-10 flex items-center gap-0.5 px-0.5 transition-colors duration-700 ${lit ? highlightPanel : panelBg} border-r border-gray-200 dark:border-zinc-700`}
                     style={{ width: cols.title, paddingTop: GROUP_GAP + 2, paddingBottom: 2 }}>
-                    <Grip disabled={pending || filtering} label={`Reorder group ${g.name}`} hint={reorderHint}
+                    <Grip disabled={pending || filtering || sorted} locked={sorted && !pending && !filtering} label={`Reorder group ${g.name}`}
+                      hint={sorted ? 'Switch to Custom order to reorder groups manually' : reorderHint}
                       onPointerDown={e => onGripPointerDown(e, { kind: 'group', id: g.id })} />
                     <button type="button" disabled={pending} aria-expanded={!g.collapsed}
                       aria-label={`${g.collapsed ? 'Expand' : 'Collapse'} group ${g.name}`}
@@ -637,6 +683,17 @@ export function PlanningGrid({
                         className="text-xs font-bold uppercase tracking-wide text-gray-800 dark:text-zinc-100" inputClassName="text-xs font-bold uppercase" />
                     </span>
                     <span className="text-xs text-gray-400 dark:text-zinc-500 flex-shrink-0 tabular-nums">{row.total}</span>
+                    {/* Same badge as task cards; a linked group sets its task's priority. */}
+                    <button type="button" disabled={pending}
+                      onClick={() => updateGroup.mutate({ planningId: planning.id, id: g.id, data: { priority: nextGroupPriority(priority, groupTask !== null) } })}
+                      title="Click to change priority" aria-label={`Priority of ${g.name}: ${priority ?? 'none'}. Click to change`}
+                      className={`flex-shrink-0 ml-1 rounded-full hover:opacity-75 transition-opacity cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-1 ${priority ? '' : revealOnHover}`}>
+                      {priority ? <PriorityBadge priority={priority} /> : (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium border border-dashed border-gray-300 text-gray-400 dark:border-zinc-600 dark:text-zinc-500">
+                          No priority
+                        </span>
+                      )}
+                    </button>
                     {!pending && (
                       <button type="button" onClick={() => removeGroup(g, row.total)} aria-label={`Delete group ${g.name}`} title="Delete group"
                         className={`${iconBtn} ml-auto text-gray-400 hover:text-red-600 dark:hover:text-red-400 ${revealOnHover}`}>
@@ -936,12 +993,13 @@ function DoneBox({ checked, disabled, label, hint, onChange }: { checked: boolea
   );
 }
 
-function Grip({ disabled, label, hint, onPointerDown }: { disabled: boolean; label: string; hint: string; onPointerDown: (e: React.PointerEvent) => void }) {
+/** `locked`: disabled but still visible on hover, so its tooltip can explain why. */
+function Grip({ disabled, locked = false, label, hint, onPointerDown }: { disabled: boolean; locked?: boolean; label: string; hint: string; onPointerDown: (e: React.PointerEvent) => void }) {
   return (
     <span role="button" aria-label={label} aria-disabled={disabled} title={hint}
       onPointerDown={disabled ? undefined : onPointerDown}
       className={`flex-shrink-0 w-3.5 h-6 flex items-center justify-center rounded touch-none text-gray-300 dark:text-zinc-600
-        ${disabled ? 'opacity-0' : `cursor-grab active:cursor-grabbing hover:text-gray-500 dark:hover:text-zinc-400 ${revealOnHover}`}`}>
+        ${locked ? 'cursor-not-allowed opacity-40 md:opacity-0 md:group-hover:opacity-40' : disabled ? 'opacity-0' : `cursor-grab active:cursor-grabbing hover:text-gray-500 dark:hover:text-zinc-400 ${revealOnHover}`}`}>
       <svg className="w-2.5 h-3.5" viewBox="0 0 10 16" fill="currentColor" aria-hidden>
         {[2, 8].flatMap(cx => [3, 8, 13].map(cy => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={1.4} />))}
       </svg>

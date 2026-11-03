@@ -247,7 +247,7 @@ export function useCreatePlanningGroup() {
       api.planningGroups.create({ planningId, name, collapsed }),
     apply: (detail, { planningId, name, collapsed }, tempId) => ({
       ...detail,
-      groups: [...detail.groups, { id: tempId, planningId, taskId: null, name, collapsed: collapsed ?? false, order: nextOrder(detail, null) }],
+      groups: [...detail.groups, { id: tempId, planningId, taskId: null, name, collapsed: collapsed ?? false, priority: null, order: nextOrder(detail, null) }],
     }),
     reconcile: (detail, group: PlanningGroup, tempId) => ({
       ...detail,
@@ -261,8 +261,12 @@ export function useUpdatePlanningGroup() {
     mutationFn: ({ id, data }: DetailVars & { id: number; data: PlanningGroupUpdate }) => api.planningGroups.update(id, data),
     patchTasks: (tasks, before, _after, { id, data }) => {
       const group = before.groups.find(g => g.id === id);
-      if (data.name === undefined || !group || group.taskId === null || !tasks.get(group.taskId)) return false;
-      tasks.patch(group.taskId, { title: data.name });
+      if ((data.name === undefined && !data.priority) || !group || group.taskId === null || !tasks.get(group.taskId)) return false;
+      // Same task fields the server sets: the name, and the priority of a linked group.
+      tasks.patch(group.taskId, {
+        ...(data.name !== undefined && { title: data.name }),
+        ...(data.priority && { priority: data.priority }),
+      });
       return true;
     },
     apply: (detail, { id, data }) => ({
@@ -498,7 +502,7 @@ export function readExportLang(): ExportLang {
 /** Fetches the file as a blob (so errors surface) and hands it to the browser as a download. */
 export function useExportPlanning() {
   return useMutation({
-    mutationFn: async ({ id, options }: { id: number; options: { lang: ExportLang; owner?: string; includeDone: boolean } }) => {
+    mutationFn: async ({ id, options }: { id: number; options: { lang: ExportLang; owner?: string; includeDone: boolean; groupIds?: number[] } }) => {
       try { localStorage.setItem(EXPORT_LANG_KEY, options.lang); } catch { /* private mode: not remembered */ }
       const { blob, fileName } = await api.plannings.exportXlsx(id, options);
       const url = URL.createObjectURL(blob);

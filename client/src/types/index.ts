@@ -286,6 +286,8 @@ export interface Planning {
   legend: PlanningLegendEntry[];
   ignoredTaskIds: number[];   // section tasks never to suggest again
   titleColumnWidth: number;   // px, left panel Title column (150-600)
+  /** Display order of groups; never rewrites the groups' `order` (the custom order). */
+  groupSortMode: GroupSortMode;
   createdAt: string;
   updatedAt: string;
 }
@@ -297,6 +299,8 @@ export interface PlanningGroup {
   name: string;
   order: number;              // shares one ordering space with root-level items
   collapsed: boolean;
+  /** Stored value; a group whose linked task exists reads the task's priority instead. */
+  priority: Priority | null;
 }
 
 export interface PlanningSegment {
@@ -329,8 +333,9 @@ export interface PlanningDetail extends Planning {
   items: PlanningItem[];
 }
 
-export type PlanningUpdate = Partial<Pick<Planning, 'name' | 'sectionId' | 'startDate' | 'weekCount' | 'targetDate' | 'highlightedWeeks' | 'legend' | 'titleColumnWidth'>>;
-export type PlanningGroupUpdate = Partial<Pick<PlanningGroup, 'name' | 'order' | 'collapsed'>>;
+export type PlanningUpdate = Partial<Pick<Planning, 'name' | 'sectionId' | 'startDate' | 'weekCount' | 'targetDate' | 'highlightedWeeks' | 'legend' | 'titleColumnWidth' | 'groupSortMode'>>;
+export type GroupSortMode = 'custom' | 'deadline' | 'priority';
+export type PlanningGroupUpdate = Partial<Pick<PlanningGroup, 'name' | 'order' | 'collapsed' | 'priority'>>;
 export type PlanningItemUpdate = Partial<Pick<PlanningItem, 'groupId' | 'taskId' | 'subtaskId' | 'title' | 'owner' | 'progress' | 'progressBeforeDone' | 'order' | 'segments'>>;
 
 /** A task deadline moved by a segment change, reported by the same request. */

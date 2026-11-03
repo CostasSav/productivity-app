@@ -72,7 +72,7 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <PlanningToolbar planning={planning} section={section} owners={owners}
+      <PlanningToolbar planning={planning} tasksById={tasksById} section={section} owners={owners}
         ownerFilter={activeFilter} onOwnerFilterChange={setOwnerFilter} brush={brush} onBrushChange={setBrushIndex}
         onShowIgnored={() => setConfirmShowIgnored(true)} wrapAll={wrapAll} onWrapAllChange={setWrapAll}
         onExportError={message => setToast({ id: Date.now(), message, tone: 'error' })} onBack={onBack} />

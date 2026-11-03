@@ -1,4 +1,5 @@
-import type { PlanningDetail, PlanningItem, PlanningReorder, PlanningSegment, SubTask, Task } from '../types';
+import type { PlanningDetail, PlanningGroup, PlanningItem, PlanningReorder, PlanningSegment, Priority, SubTask, Task } from '../types';
+import { sortGroups } from './planningSort';
 
 // Planning items are "linked but independent": a link is only read, never
 // written. A taskId that no longer resolves behaves exactly like null.
@@ -10,6 +11,20 @@ export interface PlanningLink {
 
 export function indexTasks(tasks: Task[] | undefined): Map<number, Task> {
   return new Map((tasks ?? []).map(t => [t.id, t]));
+}
+
+/** A group's priority: its live linked task's, else the stored value (standalone or dangling). */
+export function groupPriority(group: PlanningGroup, tasksById: Map<number, Task>): Priority | null {
+  const task = group.taskId != null ? tasksById.get(group.taskId) : undefined;
+  return task ? task.priority : group.priority ?? null;
+}
+
+/** Click cycle of the group badge. Tasks have no "none", so linked groups skip it. */
+export function nextGroupPriority(current: Priority | null, linked: boolean): Priority | null {
+  if (current === 'high') return 'medium';
+  if (current === 'medium') return 'low';
+  if (current === 'low') return linked ? 'high' : null;
+  return 'high';
 }
 
 /** The live task (and subtask) behind an item, or null when standalone or dangling. */
@@ -190,6 +205,41 @@ export function containerEntries(planning: Pick<PlanningDetail, 'groups' | 'item
   const items = planning.items.filter(i => i.groupId === groupId).map(i => ({ kind: 'item' as const, id: i.id, order: i.order }));
   const groups = groupId === null ? planning.groups.map(g => ({ kind: 'group' as const, id: g.id, order: g.order })) : [];
   return [...groups, ...items].sort((a, b) => a.order - b.order || (a.kind === 'group' ? -1 : 1));
+}
+
+/**
+ * Root entries as displayed. Custom: groups and root items interleaved by
+ * `order`. Deadline / priority: root items first (their own order), then the
+ * groups as sortGroups() orders them. Never writes anything.
+ */
+export function rootDisplayEntries(planning: Pick<PlanningDetail, 'groups' | 'items' | 'groupSortMode'>, tasks: Iterable<Pick<Task, 'id' | 'priority'>>, groupIds?: number[]): EntryKey[] {
+  const mode = planning.groupSortMode ?? 'custom';
+  if (mode === 'custom') return containerEntries(planning, null).map(({ kind, id }) => ({ kind, id }));
+  const items = containerEntries(planning, null).filter(e => e.kind === 'item').map(({ id }) => ({ kind: 'item' as const, id }));
+  const ids = groupIds ?? sortGroups(planning.groups, planning.items, tasks, mode).map(g => g.id);
+  return [...items, ...ids.map(id => ({ kind: 'group' as const, id }))];
+}
+
+/**
+ * In a sorted mode, groups are not positioned by `order`, so a root-level item
+ * dropped before a group (or at the end) goes after the last root item instead:
+ * root items stay above the groups and the groups' relative order is kept.
+ */
+export function sortedModeDrop(planning: Pick<PlanningDetail, 'groups' | 'items' | 'groupSortMode'>, dragged: EntryKey, target: DropTarget): DropTarget {
+  if ((planning.groupSortMode ?? 'custom') === 'custom' || dragged.kind !== 'item' || target.groupId !== null || target.before?.kind === 'item') return target;
+  const entries = containerEntries(planning, null).filter(e => !sameKey(e, dragged));
+  let last = -1;
+  entries.forEach((e, i) => { if (e.kind === 'item') last = i; });
+  const next = entries[last + 1];
+  return { groupId: null, before: next ? { kind: next.kind, id: next.id } : null };
+}
+
+/** Bulk-reorder payload that makes the displayed root order the custom order. */
+export function displayedOrderPayload(entries: EntryKey[]): PlanningReorder {
+  return {
+    groups: entries.flatMap((e, order) => (e.kind === 'group' ? [{ id: e.id, order }] : [])),
+    items: entries.flatMap((e, order) => (e.kind === 'item' ? [{ id: e.id, order, groupId: null }] : [])),
+  };
 }
 
 /**

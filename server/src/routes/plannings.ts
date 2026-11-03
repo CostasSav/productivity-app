@@ -1,4 +1,4 @@
-import { Router, type ErrorRequestHandler, type Request } from 'express';
+import { Router, type ErrorRequestHandler, type Request, type Response } from 'express';
 import { db } from '../db/database';
 import { PlanningError } from '../db/planning';
 import { CompletionError, habitZone } from '../db/completion';
@@ -47,30 +47,50 @@ planningsRouter.delete('/:id', (req, res) => {
   res.status(204).send();
 });
 
-// Excel export (read-only). Query: lang=fr|en (fr), owner=<owner>, includeDone=true|false (true).
+// Excel export (read-only): never writes planning or task data.
+async function sendExport(res: Response, planningId: number, options: { lang: unknown; owner: unknown; includeDone: boolean; groupIds?: number[] }) {
+  const { lang, owner } = options;
+  if (lang !== 'fr' && lang !== 'en') { res.status(400).json({ error: 'lang must be fr or en' }); return; }
+  if (owner !== undefined && (typeof owner !== 'string' || owner.length > 100)) { res.status(400).json({ error: 'invalid owner' }); return; }
+  const found = db.getPlanningExportData(planningId);
+  if (!found) { res.status(404).json({ error: 'Planning not found' }); return; }
+  // "Today" in the user's zone (same as the widgets), for the export date and current week.
+  const today = widgetCalendarDate(new Date().toISOString(), habitZone())!;
+  const { planning } = found;
+  const workbook = buildPlanningWorkbook(planning, planning.groups, planning.items, found.tasks, {
+    lang: lang as ExportLang, owner: owner as string | undefined, includeDone: options.includeDone, today, groupIds: options.groupIds,
+  });
+  const buffer = await writePlanningXlsx(workbook);
+  const fileName = exportFileName(planning.name, today);
+  // ASCII fallback for old clients, exact UTF-8 name for everyone else (RFC 6266 / 5987).
+  const ascii = fileName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+  res.send(buffer);
+}
+
+// Quick export (plannings list). Query: lang=fr|en (fr), owner=<owner>, includeDone=true|false (true).
+// Groups follow the planning's saved sort mode.
 planningsRouter.get('/:id/export.xlsx', async (req, res, next) => {
   try {
-    const lang = req.query.lang ?? 'fr';
     const includeDone = req.query.includeDone ?? 'true';
-    const owner = req.query.owner;
-    if (lang !== 'fr' && lang !== 'en') { res.status(400).json({ error: 'lang must be fr or en' }); return; }
     if (includeDone !== 'true' && includeDone !== 'false') { res.status(400).json({ error: 'includeDone must be true or false' }); return; }
-    if (owner !== undefined && (typeof owner !== 'string' || owner.length > 100)) { res.status(400).json({ error: 'invalid owner' }); return; }
-    const found = db.getPlanningExportData(id(req));
-    if (!found) { res.status(404).json({ error: 'Planning not found' }); return; }
-    // "Today" in the user's zone (same as the widgets), for the export date and current week.
-    const today = widgetCalendarDate(new Date().toISOString(), habitZone())!;
-    const { planning } = found;
-    const workbook = buildPlanningWorkbook(planning, planning.groups, planning.items, found.tasks, {
-      lang: lang as ExportLang, owner: owner as string | undefined, includeDone: includeDone === 'true', today,
-    });
-    const buffer = await writePlanningXlsx(workbook);
-    const fileName = exportFileName(planning.name, today);
-    // ASCII fallback for old clients, exact UTF-8 name for everyone else (RFC 6266 / 5987).
-    const ascii = fileName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
-    res.send(buffer);
+    await sendExport(res, id(req), { lang: req.query.lang ?? 'fr', owner: req.query.owner, includeDone: includeDone === 'true' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Export from the planning view. Body: { lang?, owner?, includeDone?, groupIds? }, where groupIds
+// is the group order on screen (ids of other plannings -> 400; groups not listed are appended).
+planningsRouter.post('/:id/export', async (req, res, next) => {
+  try {
+    const { lang = 'fr', owner, includeDone = true, groupIds } = body(req);
+    if (typeof includeDone !== 'boolean') { res.status(400).json({ error: 'includeDone must be a boolean' }); return; }
+    if (groupIds !== undefined && (!Array.isArray(groupIds) || groupIds.length > 5000 || !groupIds.every(g => Number.isSafeInteger(g) && g > 0))) {
+      res.status(400).json({ error: 'groupIds must be an array of group ids' }); return;
+    }
+    await sendExport(res, id(req), { lang, owner: owner ?? undefined, includeDone, groupIds: groupIds as number[] | undefined });
   } catch (error) {
     next(error);
   }

@@ -254,6 +254,8 @@ export interface Planning {
   legend: PlanningLegendEntry[];
   ignoredTaskIds: number[];   // section tasks never to suggest again
   titleColumnWidth: number;   // px, left panel Title column (150-600)
+  /** Display order of groups; never rewrites the groups' `order` (the custom order). */
+  groupSortMode: 'custom' | 'deadline' | 'priority';
   createdAt: string;
   updatedAt: string;
 }
@@ -263,6 +265,8 @@ export interface PlanningGroup {
   planningId: number;
   taskId: number | null;      // parent task the group was imported from
   name: string;
+  /** Stored value; a group whose linked task exists reads the task's priority instead (this is its snapshot). */
+  priority: Priority | null;
   order: number;
   collapsed: boolean;
 }

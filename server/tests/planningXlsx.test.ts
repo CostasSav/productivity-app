@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
-import { buildPlanningWorkbook, exportFileName, fixSheetPrOrder, sheetName, toArgb, writePlanningXlsx, type PlanningExportOptions } from '../src/exports/planningXlsx';
+import { buildPlanningWorkbook, exportGroupOrder, exportFileName, fixSheetPrOrder, sheetName, toArgb, writePlanningXlsx, type PlanningExportOptions } from '../src/exports/planningXlsx';
+import { PlanningError } from '../src/db/planning';
 import type { Planning, PlanningGroup, PlanningItem, Task } from '../src/types';
 
 const AT = '2026-11-02T10:00:00.000Z';
 const planning: Planning = {
   id: 1, name: 'Lancement / Q1: "pilote"', sectionId: 1, startDate: '2026-10-26', weekCount: 10, targetDate: '2026-11-20',
   highlightedWeeks: ['2026-11-30'], legend: [{ color: '#22c55e', label: 'Planned' }, { color: '#3b82f6', label: 'In progress' }],
-  ignoredTaskIds: [], titleColumnWidth: 280, createdAt: AT, updatedAt: AT,
+  ignoredTaskIds: [], titleColumnWidth: 280, groupSortMode: 'custom', createdAt: AT, updatedAt: AT,
 };
 const task = (id: number, fields: Partial<Task> = {}): Task => ({
   id, title: `Task ${id}`, description: null, status: 'todo', priority: 'medium', deadline: null, note_id: null, section_id: 1,
@@ -22,8 +23,8 @@ const item = (id: number, fields: Partial<PlanningItem>): PlanningItem => ({
   progressBeforeDone: null, order: id, segments: [], ...fields,
 });
 const groups: PlanningGroup[] = [
-  { id: 20, planningId: 1, taskId: null, name: 'Empty group', order: 2, collapsed: false },
-  { id: 10, planningId: 1, taskId: 3, name: 'old snapshot', order: 1, collapsed: true },
+  { id: 20, planningId: 1, taskId: null, name: 'Empty group', order: 2, collapsed: false, priority: 'high' },
+  { id: 10, planningId: 1, taskId: 3, name: 'old snapshot', order: 1, collapsed: true, priority: 'low' },
 ];
 const items: PlanningItem[] = [
   item(1, { taskId: 1, title: 'snapshot', owner: 'Alice', segments: [{ id: 'a', start: '2026-11-02', end: '2026-11-09', color: '#3b82f6' }] }),
@@ -151,4 +152,39 @@ test('workbook round-trips through an .xlsx buffer', async () => {
   assert.equal(ws.getRow(9).outlineLevel, 1);
   assert.equal(ws.getCell('J1').border?.left?.style, 'thin', 'merged month headers keep their left border');
   assert.equal(fill(ws, 4, 5), 'FF3B82F6');
+});
+
+test('group rows: effective priority in column B, bold, app colors; no bar or progress', () => {
+  const ws = build();
+  // group 10 is linked to task 3 (medium): the live task wins over the stored 'low'
+  assert.deepEqual([ws.getCell('B8').value, ws.getCell('B8').font?.bold, ws.getCell('B8').font?.color?.argb], ['Moyenne', true, 'FFA16207']);
+  assert.deepEqual([ws.getCell('B12').value, ws.getCell('B12').font?.color?.argb], ['Haute', 'FFB91C1C']);
+  assert.deepEqual([ws.getCell('C8').value, fill(ws, 8, 4)], [null, undefined]);
+  const en = buildPlanningWorkbook(planning, [{ ...groups[0], priority: 'low' }, { ...groups[1], taskId: null, priority: null }], items, tasks, { ...options, lang: 'en' }).worksheets[0];
+  assert.deepEqual([en.getCell('B12').value, en.getCell('B12').font?.color?.argb], ['Low', 'FF15803D']);
+  assert.equal(en.getCell('B8').value, null, 'no priority -> empty');
+});
+
+test('group order: explicit ids, missing groups appended, saved mode otherwise; sort note below the legend', () => {
+  const groupRows = (ws: ExcelJS.Worksheet) => colA(ws).filter(v => v === 'PARENT' || v === 'EMPTY GROUP');
+  assert.deepEqual(groupRows(build()), ['PARENT', 'EMPTY GROUP'], 'custom order');
+  assert.deepEqual(groupRows(build({ groupIds: [20, 10] })), ['EMPTY GROUP', 'PARENT']);
+  assert.deepEqual(groupRows(build({ groupIds: [20] })), ['EMPTY GROUP', 'PARENT'], 'unlisted groups follow');
+  assert.deepEqual(exportGroupOrder(groups, items, tasks, 'custom', []).map(g => g.id), [10, 20], 'empty list -> custom order');
+  const fails = (ids: number[]) => assert.throws(() => build({ groupIds: ids }), (e: unknown) => e instanceof PlanningError && e.status === 400);
+  fails([10, 99]);
+  fails([10, 10]);
+  // no ids: saved mode (deadline: group 10 has bars, 20 has none; priority: 20 high > 10 medium)
+  const withMode = (groupSortMode: Planning['groupSortMode'], lang: 'fr' | 'en' = 'fr') =>
+    buildPlanningWorkbook({ ...planning, groupSortMode }, groups, items, tasks, { ...options, lang }).worksheets[0];
+  assert.deepEqual(groupRows(withMode('deadline')), ['PARENT', 'EMPTY GROUP']);
+  assert.deepEqual(groupRows(withMode('priority')), ['EMPTY GROUP', 'PARENT']);
+  // legend title at 15, entries 16-17, note right below
+  const ws = build();
+  assert.deepEqual([ws.getCell(18, 4).value, ws.getCell(18, 4).font?.italic, ws.getCell(18, 4).font?.size, ws.getCell(18, 4).font?.color?.argb],
+    ['Groupes triés par : ordre personnalisé', true, 9, 'FF808080']);
+  assert.equal(withMode('deadline').getCell(18, 4).value, 'Groupes triés par : échéance');
+  assert.equal(withMode('priority', 'en').getCell(18, 4).value, 'Groups sorted by: priority');
+  const noLegend = buildPlanningWorkbook({ ...planning, legend: [] }, groups, items, tasks, options).worksheets[0];
+  assert.equal(noLegend.getCell(15, 4).value, 'Groupes triés par : ordre personnalisé');
 });

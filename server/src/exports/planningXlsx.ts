@@ -1,7 +1,8 @@
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
-import { addDays, itemDone, itemProgress, itemTitle, mondayOf, weeksBetween } from '../db/planning';
-import type { Planning, PlanningGroup, PlanningItem, Task } from '../types';
+import { PlanningError, addDays, itemDone, itemProgress, itemTitle, mondayOf, weeksBetween } from '../db/planning';
+import { effectiveGroupPriority, sortGroups, type GroupSortMode } from '../db/planningSort';
+import type { Planning, PlanningGroup, PlanningItem, Priority, Task } from '../types';
 
 // Excel export of one planning. Pure: it only reads the objects it is given
 // and returns a workbook, so it can be tested without HTTP or the database.
@@ -13,16 +14,25 @@ export interface PlanningExportOptions {
   owner?: string;        // only items with exactly this owner
   includeDone: boolean;  // false drops done items (same "done" as the row checkbox)
   today: string;         // YYYY-MM-DD in the user's zone: export date and current-week outline
+  /** Group ids in the order shown in the app; when absent, the planning's saved sort mode decides. */
+  groupIds?: number[];
 }
 
-const TEXT: Record<ExportLang, { months: string[]; title: string; owner: string; progress: string; exportedOn: string; legend: string }> = {
+const TEXT: Record<ExportLang, {
+  months: string[]; title: string; owner: string; progress: string; exportedOn: string; legend: string;
+  sortedBy: string; modes: Record<GroupSortMode, string>; priorities: Record<Priority, string>;
+}> = {
   fr: {
     months: ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'],
     title: 'Titre', owner: 'Qui', progress: 'Avancement', exportedOn: 'Exporté le', legend: 'Légende',
+    sortedBy: 'Groupes triés par :', modes: { custom: 'ordre personnalisé', deadline: 'échéance', priority: 'priorité' },
+    priorities: { high: 'Haute', medium: 'Moyenne', low: 'Basse' },
   },
   en: {
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     title: 'Title', owner: 'Owner', progress: 'Progress', exportedOn: 'Exported on', legend: 'Legend',
+    sortedBy: 'Groups sorted by:', modes: { custom: 'custom order', deadline: 'deadline', priority: 'priority' },
+    priorities: { high: 'High', medium: 'Medium', low: 'Low' },
   },
 };
 
@@ -37,8 +47,28 @@ const GREY = 'FF808080';
 const LIGHT_GREY = 'FFBFBFBF';
 const RED = 'FFE53935';
 const FALLBACK_FILL = 'FF22C55E';
+// Text colors of the app's priority badge (Tailwind red/yellow/green-700).
+const PRIORITY_ARGB: Record<Priority, string> = { high: 'FFB91C1C', medium: 'FFA16207', low: 'FF15803D' };
 
 // ── Small pure helpers ────────────────────────────────────────────────────────
+
+/**
+ * Group order of the export. With `groupIds` (the app's display order): every
+ * id must belong to the planning, and groups missing from the list follow in
+ * custom order so nothing is dropped. Without it: sortGroups with `mode`.
+ */
+export function exportGroupOrder(groups: PlanningGroup[], items: PlanningItem[], tasks: Task[], mode: GroupSortMode, groupIds?: number[]): PlanningGroup[] {
+  if (groupIds === undefined) return sortGroups(groups, items, tasks, mode);
+  const byId = new Map(groups.map(g => [g.id, g]));
+  const listed = new Set<number>();
+  for (const id of groupIds) {
+    if (!byId.has(id)) throw new PlanningError(400, `group ${id} does not belong to this planning`);
+    if (listed.has(id)) throw new PlanningError(400, `group ${id} is listed twice`);
+    listed.add(id);
+  }
+  const rest = sortGroups(groups.filter(g => !listed.has(g.id)), items, tasks, 'custom');
+  return [...groupIds.map(id => byId.get(id)!), ...rest];
+}
 
 /** App colors are validated hex (#rgb, #rrggbb, #rrggbbaa) -> Excel ARGB. Anything else falls back to the default green. */
 export function toArgb(color: string): string {
@@ -161,7 +191,9 @@ export function buildPlanningWorkbook(
   const groupIds = new Set(groups.map(g => g.id));
   const body: BodyRow[] = byOrder(items.filter(i => i.groupId === null || !groupIds.has(i.groupId)))
     .filter(keep).map(item => ({ kind: 'item' as const, item, level: 0 as const }));
-  for (const group of byOrder(groups)) {
+  // Groups in the order shown in the app (explicit ids, else the saved sort mode).
+  const mode = planning.groupSortMode ?? 'custom';
+  for (const group of exportGroupOrder(groups, items, tasks, mode, options.groupIds)) {
     const members = byOrder(items.filter(i => i.groupId === group.id)).filter(keep);
     if (filtering && members.length === 0) continue;
     body.push({ kind: 'spacer' }, { kind: 'group', group }, ...members.map(item => ({ kind: 'item' as const, item, level: 1 as const })));
@@ -256,6 +288,7 @@ export function buildPlanningWorkbook(
 
   // Body
   const filled = new Set<string>();
+  const tasksById = new Map(tasks.map(task => [task.id, task]));
   body.forEach((entry, index) => {
     const r = firstBodyRow + index;
     const row = ws.getRow(r);
@@ -264,6 +297,12 @@ export function buildPlanningWorkbook(
       const name = (entry.group.taskId !== null ? tasks.find(x => x.id === entry.group.taskId)?.title : undefined) ?? entry.group.name;
       row.getCell(1).value = name.toUpperCase();
       row.getCell(1).font = { ...FONT, bold: true };
+      // Effective priority (live task's when linked), colored like the app's badge. No bar, no progress.
+      const priority = effectiveGroupPriority(entry.group, tasksById);
+      if (priority) {
+        row.getCell(2).value = t.priorities[priority];
+        row.getCell(2).font = { ...FONT, bold: true, color: { argb: PRIORITY_ARGB[priority] } };
+      }
       const height = rowHeight(name, true);
       if (height) row.height = height;
       return;
@@ -318,8 +357,8 @@ export function buildPlanningWorkbook(
   borders.apply(ws);
 
   // Legend: two empty rows, then a title and one swatch per entry.
+  const start = lastRow + 3;
   if (planning.legend.length) {
-    const start = lastRow + 3;
     cell(start, FIRST_WEEK_COL).value = t.legend;
     cell(start, FIRST_WEEK_COL).font = { ...FONT, bold: true };
     cell(start, FIRST_WEEK_COL).alignment = { vertical: 'middle' };
@@ -331,6 +370,11 @@ export function buildPlanningWorkbook(
       cell(r, FIRST_WEEK_COL + 1).alignment = { vertical: 'middle', horizontal: 'left' };
     });
   }
+  // How the groups were ordered, just below the legend.
+  const note = cell(planning.legend.length ? start + 1 + planning.legend.length : start, FIRST_WEEK_COL);
+  note.value = `${t.sortedBy} ${t.modes[mode]}`;
+  note.font = { ...FONT, size: 9, italic: true, color: { argb: GREY } };
+  note.alignment = { vertical: 'middle', horizontal: 'left' };
 
   return wb;
 }

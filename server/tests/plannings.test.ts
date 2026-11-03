@@ -443,6 +443,56 @@ test('backfill only adds progressBeforeDone and never changes existing values', 
   assert.equal(plan.id, data.plannings[0].id);
 });
 
+test('group priority: standalone stored, linked live from the task, dangling falls back to the snapshot', () => {
+  const data = withSeqs(fixture([task(1, { priority: 'high', subtasks: subs('a') }), task(2, { subtasks: subs('b') })]));
+  const plan = p.createPlanning(data, { name: 'P', sectionId: 1 }, AT, '2026-11-02');
+  const w = writer(data);
+  const linked = plan.groups.find(g => g.taskId === 1)!;
+  assert.equal(linked.priority, 'high', 'new linked groups snapshot the task priority');
+  const free = p.createGroup(data, { planningId: plan.id, name: 'Free' }, AT);
+  assert.equal(free.priority, null);
+
+  // standalone: any value or null, never touches tasks
+  p.updateGroup(data, free.id, { priority: 'low' }, AT, w);
+  assert.equal(p.getPlanningDetail(data, plan.id)!.groups.find(g => g.id === free.id)!.priority, 'low');
+  p.updateGroup(data, free.id, { priority: null }, AT, w);
+  assert.equal(data.planningGroups.find(g => g.id === free.id)!.priority, null);
+  fails(() => p.updateGroup(data, free.id, { priority: 'urgent' }, AT, w), 400);
+
+  // linked: updates the real task and the snapshot in the same call; null is refused
+  p.updateGroup(data, linked.id, { priority: 'low' }, AT, w);
+  assert.deepEqual([data.tasks[0].priority, data.planningGroups.find(g => g.id === linked.id)!.priority], ['low', 'low']);
+  fails(() => p.updateGroup(data, linked.id, { priority: null }, AT, w), 400);
+  assert.equal(data.tasks[0].priority, 'low');
+  // a change made on the Tasks page shows up live
+  data.tasks[0].priority = 'medium';
+  assert.equal(p.getPlanningDetail(data, plan.id)!.groups.find(g => g.id === linked.id)!.priority, 'medium');
+  assert.equal(data.planningGroups.find(g => g.id === linked.id)!.priority, 'low', 'reading never writes');
+  // other group edits leave the task priority alone
+  p.updateGroup(data, linked.id, { collapsed: true }, AT, w);
+  assert.equal(data.tasks[0].priority, 'medium');
+
+  // dangling: the stored snapshot is used and can be cleared
+  data.tasks = data.tasks.filter(t => t.id !== 1);
+  assert.equal(p.getPlanningDetail(data, plan.id)!.groups.find(g => g.id === linked.id)!.priority, 'low');
+  p.updateGroup(data, linked.id, { priority: null }, AT, w);
+  assert.equal(data.planningGroups.find(g => g.id === linked.id)!.priority, null);
+});
+
+test('backfill only adds group priority (null) and never changes existing groups', () => {
+  const data = fixture([task(1, { priority: 'high', subtasks: subs('a') })]);
+  p.createPlanning(data, { name: 'P', sectionId: 1 }, AT, '2026-11-02');
+  p.createGroup(data, { planningId: 1, name: 'Free' }, AT);
+  data.planningGroups[1].priority = 'low';
+  delete (data.planningGroups[0] as Partial<typeof data.planningGroups[0]>).priority;
+  const before = structuredClone(data);
+  p.backfillPlanningData(data);
+  assert.equal(data.planningGroups[0].priority, null);
+  assert.equal(data.planningGroups[1].priority, 'low', 'existing values are kept');
+  delete (data.planningGroups[0] as Partial<typeof data.planningGroups[0]>).priority;
+  assert.deepEqual(data, before);
+});
+
 test('titleColumnWidth: default, validation, add-only backfill', () => {
   const data = fixture([]);
   const plan = p.createPlanning(data, { name: 'P' }, AT, '2026-11-02');

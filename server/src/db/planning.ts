@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { calendarDay } from './completion';
-import type { Section, Task, Planning, PlanningDetail, PlanningSummary, PlanningGroup, PlanningItem, PlanningLegendEntry, PlanningSegment, DeadlineSync } from '../types';
+import { GROUP_SORT_MODES, type GroupSortMode } from './planningSort';
+import type { Section, Task, Planning, PlanningDetail, PlanningSummary, PlanningGroup, PlanningItem, PlanningLegendEntry, PlanningSegment, DeadlineSync, Priority } from '../types';
 
 // Links are resolved at read time and a dangling link behaves exactly like a
 // standalone item. This module never writes data.tasks itself: the few edits
@@ -10,7 +11,7 @@ import type { Section, Task, Planning, PlanningDetail, PlanningSummary, Planning
 
 /** Task writes requested by planning actions; applied by the caller in the same transaction. */
 export interface TaskWriter {
-  setTaskFields(taskId: number, fields: { deadline?: string | null; title?: string }): void;
+  setTaskFields(taskId: number, fields: { deadline?: string | null; title?: string; priority?: Priority }): void;
   setSubtaskTitle(taskId: number, subtaskId: number, title: string): void;
 }
 
@@ -81,6 +82,11 @@ function day(value: unknown, field: string): string {
   return calendarDay(value) ? value : bad(`${field} must be a YYYY-MM-DD date`);
 }
 const monday = (value: unknown, field: string) => mondayOf(day(value, field));
+/** Same values as task priorities; null (no priority) only exists on planning groups. */
+const PRIORITIES: readonly Priority[] = ['high', 'medium', 'low'];
+function priority(value: unknown): Priority | null {
+  return value === null || PRIORITIES.includes(value as Priority) ? value as Priority | null : bad(`priority must be one of: ${PRIORITIES.join(', ')}, or null`);
+}
 function color(value: unknown): string {
   return typeof value === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : bad('color must be a hex color');
 }
@@ -154,6 +160,11 @@ export function linkTarget(data: Pick<PlanningData, 'tasks'>, taskId: number | n
   return subtask ? { task, subtask, title: subtask.title } : undefined;
 }
 
+/** The live task a group was made from, or undefined (standalone or dangling). */
+function groupTask(data: Pick<PlanningData, 'tasks'>, group: PlanningGroup): Task | undefined {
+  return group.taskId === null ? undefined : data.tasks.find(t => t.id === group.taskId);
+}
+
 /** Root-level groups and items share one ordering space so the UI can interleave them. */
 function nextOrder(data: PlanningData, planningId: number, groupId: number | null): number {
   const orders = data.planningItems.filter(i => i.planningId === planningId && i.groupId === groupId).map(i => i.order);
@@ -161,9 +172,12 @@ function nextOrder(data: PlanningData, planningId: number, groupId: number | nul
   return orders.length ? Math.max(...orders) + 1 : 0;
 }
 
-function newGroup(data: PlanningData, planningId: number, name: string, order: number, taskId: number | null = null): PlanningGroup {
+function newGroup(data: PlanningData, planningId: number, name: string, order: number, task: Task | null = null): PlanningGroup {
   data._planningGroupSeq += 1;
-  const group: PlanningGroup = { id: data._planningGroupSeq, planningId, taskId, name, order, collapsed: false };
+  const group: PlanningGroup = {
+    id: data._planningGroupSeq, planningId, taskId: task?.id ?? null, name, order, collapsed: false,
+    priority: task?.priority ?? null,
+  };
   data.planningGroups.push(group);
   return group;
 }
@@ -189,7 +203,9 @@ export function getPlanningDetail(data: PlanningData, id: number): PlanningDetai
   if (!planning) return undefined;
   return {
     ...planning,
-    groups: data.planningGroups.filter(g => g.planningId === id).sort((a, b) => a.order - b.order),
+    groups: data.planningGroups.filter(g => g.planningId === id).sort((a, b) => a.order - b.order)
+      // A live linked task owns the priority; the stored value is only its snapshot.
+      .map(g => { const task = groupTask(data, g); return task && task.priority !== g.priority ? { ...g, priority: task.priority } : g; }),
     items: data.planningItems.filter(i => i.planningId === id).sort((a, b) => a.order - b.order)
       // A dangling link is reported as standalone; the stored snapshot title stays.
       .map(i => linkTarget(data, i.taskId, i.subtaskId) || i.taskId === null ? i : { ...i, taskId: null, subtaskId: null }),
@@ -205,7 +221,7 @@ export function createPlanning(data: PlanningData, body: Record<string, unknown>
   data._planningSeq += 1;
   const planning: Planning = {
     id: data._planningSeq, name, sectionId, startDate, weekCount: MIN_WEEKS, targetDate,
-    highlightedWeeks: [], legend: structuredClone(DEFAULT_LEGEND), ignoredTaskIds: [], titleColumnWidth: DEFAULT_TITLE_WIDTH, createdAt: at, updatedAt: at,
+    highlightedWeeks: [], legend: structuredClone(DEFAULT_LEGEND), ignoredTaskIds: [], titleColumnWidth: DEFAULT_TITLE_WIDTH, groupSortMode: 'custom', createdAt: at, updatedAt: at,
   };
   data.plannings.push(planning);
   if (sectionId !== null) importSection(data, planning);
@@ -238,7 +254,7 @@ function convertTask(data: PlanningData, planning: Planning, task: Task, groupId
     deadline ? [{ id: randomUUID(), start: mondayOf(deadline), end: mondayOf(deadline), color: fill }] : [];
   const base = { planningId: planning.id, owner: null, progress: 0, progressBeforeDone: null };
   if (task.subtasks?.length) {
-    const group = newGroup(data, planning.id, task.title, nextOrder(data, planning.id, null), task.id);
+    const group = newGroup(data, planning.id, task.title, nextOrder(data, planning.id, null), task);
     task.subtasks.forEach((sub, order) => {
       const linked = Number.isSafeInteger(sub.id);
       newItem(data, { ...base, groupId: group.id, taskId: linked ? task.id : null, subtaskId: linked ? sub.id : null,
@@ -351,8 +367,11 @@ export function clearIgnoredTasks(data: PlanningData, id: number, at: string): P
 export function backfillPlanningData(data: PlanningData) {
   for (const p of data.plannings) if (!Array.isArray(p.ignoredTaskIds)) p.ignoredTaskIds = [];
   for (const p of data.plannings) if (p.titleColumnWidth === undefined) p.titleColumnWidth = DEFAULT_TITLE_WIDTH;
+  for (const p of data.plannings) if (p.groupSortMode === undefined) p.groupSortMode = 'custom';
   // Only adds the field; existing values (progress, segments, titles...) are never touched.
   for (const i of data.planningItems) if (i.progressBeforeDone === undefined) i.progressBeforeDone = null;
+  // Add-only: linked groups keep reading their task's priority live.
+  for (const g of data.planningGroups) if (g.priority === undefined) g.priority = null;
   for (const g of data.planningGroups) {
     if (g.taskId !== undefined) continue;
     const planning = data.plannings.find(p => p.id === g.planningId);
@@ -377,6 +396,11 @@ export function updatePlanning(data: PlanningData, id: number, body: Record<stri
   if (body.highlightedWeeks !== undefined) next.highlightedWeeks = highlightedWeeks(body.highlightedWeeks);
   if (body.legend !== undefined) next.legend = legend(body.legend);
   if (body.titleColumnWidth !== undefined) next.titleColumnWidth = int(body.titleColumnWidth, 'titleColumnWidth', MIN_TITLE_WIDTH, MAX_TITLE_WIDTH);
+  if (body.groupSortMode !== undefined) {
+    // Only the display mode changes; group `order` values are left as they are.
+    next.groupSortMode = GROUP_SORT_MODES.includes(body.groupSortMode as GroupSortMode)
+      ? body.groupSortMode as GroupSortMode : bad(`groupSortMode must be one of: ${GROUP_SORT_MODES.join(', ')}`);
+  }
   Object.assign(planning, next);
   touch(planning, at);
   return planning;
@@ -406,6 +430,15 @@ export function updateGroup(data: PlanningData, id: number, body: Record<string,
     next.name = text(body.name, 'name');
     // A group made from a task renames that task too; a dangling link only renames the group.
     if (tasks && group.taskId !== null && data.tasks.some(t => t.id === group.taskId)) tasks.setTaskFields(group.taskId, { title: next.name });
+  }
+  if (body.priority !== undefined) {
+    next.priority = priority(body.priority);
+    // A linked group sets the real task's priority (tasks have no "none") and keeps a snapshot.
+    const task = groupTask(data, group);
+    if (task) {
+      if (next.priority === null) bad('a group linked to a task needs a priority');
+      tasks?.setTaskFields(task.id, { priority: next.priority! });
+    }
   }
   if (body.collapsed !== undefined) next.collapsed = Boolean(body.collapsed);
   if (body.order !== undefined) next.order = int(body.order, 'order', 0, Number.MAX_SAFE_INTEGER);

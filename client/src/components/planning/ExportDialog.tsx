@@ -8,6 +8,8 @@ interface ExportDialogProps {
   owners: string[];
   /** Owner currently filtered in the view; preselected when it is a real owner. */
   initialOwner?: string;
+  /** Group ids in the order shown on screen; the Excel uses exactly this order. */
+  groupIds: number[];
   onError: (message: string) => void;
   onClose: () => void;
 }
@@ -16,7 +18,7 @@ const ALL = '';
 const fieldCls = 'w-full border rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100';
 const labelCls = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
 
-export function ExportDialog({ planningId, owners, initialOwner, onError, onClose }: ExportDialogProps) {
+export function ExportDialog({ planningId, owners, initialOwner, groupIds, onError, onClose }: ExportDialogProps) {
   const exportPlanning = useExportPlanning();
   const [lang, setLang] = useState<ExportLang>(readExportLang);
   const [owner, setOwner] = useState(initialOwner && owners.includes(initialOwner) ? initialOwner : ALL);
@@ -24,7 +26,7 @@ export function ExportDialog({ planningId, owners, initialOwner, onError, onClos
 
   const download = async () => {
     try {
-      await exportPlanning.mutateAsync({ id: planningId, options: { lang, owner: owner || undefined, includeDone } });
+      await exportPlanning.mutateAsync({ id: planningId, options: { lang, owner: owner || undefined, includeDone, groupIds } });
       onClose();
     } catch (e) {
       onError(e instanceof Error ? `Export failed: ${e.message}` : 'Export failed');

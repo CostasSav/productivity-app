@@ -1,7 +1,58 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clampCreate, clampMove, clampResize, computeReorder, freeGap, weekMonday } from '../src/utils/planning';
-import type { PlanningGroup, PlanningItem } from '../src/types';
+import {
+  clampCreate, clampMove, clampResize, computeReorder, displayedOrderPayload, freeGap, groupPriority, nextGroupPriority, rootDisplayEntries,
+  sortedModeDrop, weekMonday,
+} from '../src/utils/planning';
+import type { PlanningGroup, PlanningItem, Task } from '../src/types';
+
+test('sorted modes put root items first; drops keep them there; apply writes the displayed order', () => {
+  const g = (id: number, order: number, priority: PlanningGroup['priority']) =>
+    ({ id, planningId: 1, taskId: null, name: `G${id}`, order, collapsed: false, priority }) as PlanningGroup;
+  const it = (id: number, groupId: number | null, order: number, end?: string) =>
+    ({ id, planningId: 1, groupId, taskId: null, subtaskId: null, title: `I${id}`, owner: null, progress: 0, progressBeforeDone: null, order,
+      segments: end ? [{ id: `s${id}`, start: end, end, color: '#000' }] : [] }) as PlanningItem;
+  const planning = {
+    groupSortMode: 'custom' as const,
+    groups: [g(1, 0, 'low'), g(2, 2, 'high'), g(3, 4, null)],
+    items: [it(10, null, 1), it(11, null, 3), it(20, 1, 0, '2026-11-02'), it(21, 2, 0, '2026-12-07'), it(22, 3, 0, '2026-11-16')],
+  };
+  const keys = (es: { kind: string; id: number }[]) => es.map(e => `${e.kind[0]}${e.id}`).join(' ');
+  assert.equal(keys(rootDisplayEntries(planning, [])), 'g1 i10 g2 i11 g3', 'custom interleaves by order');
+  assert.equal(keys(rootDisplayEntries({ ...planning, groupSortMode: 'deadline' }, [])), 'i10 i11 g1 g3 g2');
+  assert.equal(keys(rootDisplayEntries({ ...planning, groupSortMode: 'priority' }, [])), 'i10 i11 g2 g1 g3');
+  // switching modes never touches `order`: back to custom gives the same order
+  assert.equal(keys(rootDisplayEntries({ ...planning, groupSortMode: 'custom' }, [])), 'g1 i10 g2 i11 g3');
+
+  // a root item dropped before a group in a sorted mode lands after the last root item
+  const sortedPlan = { ...planning, groupSortMode: 'priority' as const };
+  assert.deepEqual(sortedModeDrop(sortedPlan, { kind: 'item', id: 20 }, { groupId: null, before: { kind: 'group', id: 2 } }),
+    { groupId: null, before: { kind: 'group', id: 3 } });
+  assert.deepEqual(sortedModeDrop(sortedPlan, { kind: 'item', id: 20 }, { groupId: null, before: { kind: 'item', id: 10 } }),
+    { groupId: null, before: { kind: 'item', id: 10 } }, 'between root items: unchanged');
+  assert.deepEqual(sortedModeDrop(planning, { kind: 'item', id: 20 }, { groupId: null, before: { kind: 'group', id: 2 } }),
+    { groupId: null, before: { kind: 'group', id: 2 } }, 'custom: unchanged');
+
+  assert.deepEqual(displayedOrderPayload(rootDisplayEntries(sortedPlan, [])), {
+    groups: [{ id: 2, order: 2 }, { id: 1, order: 3 }, { id: 3, order: 4 }],
+    items: [{ id: 10, order: 0, groupId: null }, { id: 11, order: 1, groupId: null }],
+  });
+});
+
+test('group priority: live task wins, cycle skips "none" for linked groups', () => {
+  const group = { id: 1, planningId: 1, taskId: 7, name: 'G', order: 0, collapsed: false, priority: 'low' } as PlanningGroup;
+  const tasks = new Map([[7, { id: 7, priority: 'high' } as Task]]);
+  assert.equal(groupPriority(group, tasks), 'high');
+  assert.equal(groupPriority(group, new Map()), 'low', 'dangling link uses the stored snapshot');
+  assert.equal(groupPriority({ ...group, taskId: null, priority: undefined as never }, tasks), null);
+  const cycle = (linked: boolean, from: PlanningGroup['priority']) => {
+    const seen = [from];
+    for (let i = 0; i < 4; i++) seen.push(nextGroupPriority(seen.at(-1)!, linked));
+    return seen;
+  };
+  assert.deepEqual(cycle(false, null), [null, 'high', 'medium', 'low', null]);
+  assert.deepEqual(cycle(true, 'high'), ['high', 'medium', 'low', 'high', 'medium']);
+});
 
 test('freeGap is bounded by the nearest neighbours only', () => {
   const others = [{ start: 0, end: 1 }, { start: 8, end: 9 }, { start: 12, end: 12 }];
@@ -97,4 +148,24 @@ test('export file name comes from Content-Disposition (UTF-8 form preferred)', (
 
 test('downloads refuse to run without a session', async () => {
   await assert.rejects(requestBlob('/api/plannings/1/export.xlsx'), (e: Error & { status?: number }) => e.status === 401);
+});
+
+test('export with the on-screen group order is a POST with the CSRF token; quick export stays a GET', async t => {
+  const { browserAuth, clearSession } = await import('../src/api/request');
+  const { api } = await import('../src/api');
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; clearSession(); });
+  const calls: { url: string; method: string; csrf: string | null; body: unknown }[] = [];
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url).includes('/auth/')) return Response.json({ authenticated: true, csrfToken: 'synthetic-csrf' });
+    const headers = new Headers(options.headers);
+    calls.push({ url: String(url), method: options.method ?? 'GET', csrf: headers.get('X-CSRF-Token'), body: options.body ? JSON.parse(String(options.body)) : undefined });
+    return new Response(new Blob(['xlsx']), { headers: { 'Content-Disposition': 'attachment; filename="P.xlsx"' } });
+  };
+  await browserAuth.session();
+  const res = await api.plannings.exportXlsx(4, { lang: 'en', includeDone: false, groupIds: [3, 1, 2] });
+  await api.plannings.exportXlsx(4, { lang: 'fr', includeDone: true });
+  assert.equal(res.fileName, 'P.xlsx');
+  assert.deepEqual(calls[0], { url: '/api/plannings/4/export', method: 'POST', csrf: 'synthetic-csrf', body: { lang: 'en', includeDone: false, groupIds: [3, 1, 2] } });
+  assert.deepEqual([calls[1].method, calls[1].url, calls[1].csrf], ['GET', '/api/plannings/4/export.xlsx?lang=fr&includeDone=true', null]);
 });

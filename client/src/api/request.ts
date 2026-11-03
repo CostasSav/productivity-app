@@ -57,14 +57,18 @@ export function fileNameFromDisposition(header: string | null): string | null {
   return /filename\s*=\s*"([^"]*)"/i.exec(header)?.[1] ?? /filename\s*=\s*([^;]+)/i.exec(header)?.[1]?.trim() ?? null;
 }
 
-/** GET a file (e.g. an export) with the same session handling as request(). */
-export async function requestBlob(url: string): Promise<{ blob: Blob; fileName: string | null }> {
+/** Download a file (e.g. an export) with the same session handling as request(); a body makes it a POST. */
+export async function requestBlob(url: string, jsonBody?: unknown): Promise<{ blob: Blob; fileName: string | null }> {
   if (!authenticated) throw new ApiError(401, 'Please sign in');
   const started = generation;
   const controller = new AbortController();
   pending.add(controller);
+  const post = jsonBody !== undefined;
   try {
-    const res = await fetch(url, { signal: controller.signal, credentials: 'same-origin', cache: 'no-store' });
+    const res = await fetch(url, {
+      signal: controller.signal, credentials: 'same-origin', cache: 'no-store',
+      ...(post && { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify(jsonBody) }),
+    });
     if (started !== generation) throw new DOMException('Session changed', 'AbortError');
     if (!res.ok) {
       if (res.status === 401) clearSession();

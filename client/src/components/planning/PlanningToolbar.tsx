@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { useUpdatePlanning } from '../../hooks/usePlannings';
+import { useReorderPlanning, useUpdatePlanning } from '../../hooks/usePlannings';
 import { useMobile } from '../../hooks/useMobile';
 import { InlineText } from './InlineText';
 import { ExportDialog, DownloadIcon } from './ExportDialog';
-import { mondayOf, formatPlanningRange } from '../../utils/planning';
-import type { PlanningDetail, PlanningLegendEntry, Section } from '../../types';
+import { Modal } from '../ui/Modal';
+import { mondayOf, formatPlanningRange, displayedOrderPayload, rootDisplayEntries } from '../../utils/planning';
+import type { GroupSortMode, PlanningDetail, PlanningLegendEntry, Section, Task } from '../../types';
 
 export const ALL_OWNERS = '__all__';
 export const UNASSIGNED = '__none__';
 
 const MAX_WEEKS = 520;
+const SORT_MODES: { mode: GroupSortMode; label: string; hint: string }[] = [
+  { mode: 'custom', label: 'Custom', hint: 'Your own order (drag groups to change it)' },
+  { mode: 'deadline', label: 'Deadline', hint: 'Earliest last bar first; groups without bars last' },
+  { mode: 'priority', label: 'Priority', hint: 'High, medium, low, then no priority' },
+];
 const LEGEND_PALETTE = ['#22c55e', '#3b82f6', '#f97316', '#a855f7', '#ef4444', '#eab308', '#14b8a6', '#64748b'];
 
 const fieldCls = 'border rounded px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100 [color-scheme:light] dark:[color-scheme:dark]';
@@ -18,6 +24,7 @@ const stepBtn = 'w-7 h-7 flex items-center justify-center rounded border border-
 
 interface PlanningToolbarProps {
   planning: PlanningDetail;
+  tasksById: Map<number, Task>;
   section?: Section;
   owners: string[];
   ownerFilter: string;
@@ -31,13 +38,22 @@ interface PlanningToolbarProps {
   onBack: () => void;
 }
 
-export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onShowIgnored, wrapAll, onWrapAllChange, onExportError, onBack }: PlanningToolbarProps) {
+export function PlanningToolbar({ planning, tasksById, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onShowIgnored, wrapAll, onWrapAllChange, onExportError, onBack }: PlanningToolbarProps) {
   const [exporting, setExporting] = useState(false);
+  const [confirmApply, setConfirmApply] = useState(false);
   const updatePlanning = useUpdatePlanning();
+  const reorder = useReorderPlanning();
+  const sortMode = planning.groupSortMode ?? 'custom';
   const isMobile = useMobile();
   // On phones the controls fold away so the timeline keeps most of the screen.
   const [showControls, setShowControls] = useState(false);
   const update = (data: Parameters<typeof updatePlanning.mutate>[0]['data']) => updatePlanning.mutate({ id: planning.id, data });
+  /** Writes the displayed order into the groups' `order` (replacing the manual one), then shows it as Custom. */
+  const applyAsCustom = () => {
+    setConfirmApply(false);
+    reorder.mutate({ planningId: planning.id, ...displayedOrderPayload(rootDisplayEntries(planning, tasksById.values())) });
+    update({ groupSortMode: 'custom' });
+  };
 
   return (
     <div className="flex-shrink-0 px-4 md:px-6 pt-16 md:pt-4 pb-3 border-b border-gray-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]">
@@ -75,9 +91,29 @@ export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwne
         </div>
       </div>
 
+      {confirmApply && (
+        <Modal title="Replace your custom order?" onClose={() => setConfirmApply(false)}
+          footer={
+            <>
+              <button onClick={() => setConfirmApply(false)} className="px-4 py-3 min-h-[44px] rounded text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
+              <button onClick={applyAsCustom}
+                className="px-4 py-3 min-h-[44px] bg-teal-600 text-white rounded hover:bg-teal-700 cursor-pointer active:opacity-90">
+                Replace custom order
+              </button>
+            </>
+          }>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            The groups will keep the order sorted by {sortMode} as your custom order, and the view switches to Custom.
+            Your current manual order is replaced and can't be restored.
+          </p>
+        </Modal>
+      )}
+
       {exporting && (
         <ExportDialog planningId={planning.id} owners={owners}
           initialOwner={ownerFilter !== ALL_OWNERS && ownerFilter !== UNASSIGNED ? ownerFilter : undefined}
+          // Every group in on-screen order (same function as the grid); the server drops the ones a filter empties.
+          groupIds={rootDisplayEntries(planning, tasksById.values()).flatMap(e => (e.kind === 'group' ? [e.id] : []))}
           onError={onExportError} onClose={() => setExporting(false)} />
       )}
 
@@ -132,6 +168,32 @@ export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwne
 
         {/* Display controls stay together on the right, and wrap as one block on narrow screens. */}
         <div className="ml-auto flex items-end gap-x-5 gap-y-3 flex-wrap">
+        <div className="flex flex-col gap-1">
+          <span id="group-order-label" className={labelCls}>Order</span>
+          <div className="flex items-center gap-2">
+            <div role="radiogroup" aria-labelledby="group-order-label"
+              className="flex rounded border border-gray-200 dark:border-gray-600 overflow-hidden">
+              {SORT_MODES.map(({ mode, label, hint }, i) => (
+                <button key={mode} type="button" role="radio" aria-checked={sortMode === mode} title={hint}
+                  onClick={() => { if (mode !== sortMode) update({ groupSortMode: mode }); }}
+                  className={`px-2.5 py-1 text-sm cursor-pointer transition-colors ${i ? 'border-l border-gray-200 dark:border-gray-600' : ''}
+                    ${sortMode === mode
+                      ? 'bg-teal-50 text-teal-700 font-medium dark:bg-teal-500/10 dark:text-teal-300'
+                      : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/[0.06]'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {sortMode !== 'custom' && (
+              <button type="button" onClick={() => setConfirmApply(true)}
+                title="Save this order as your custom order"
+                className="px-2 py-1 rounded text-sm text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-500/10 cursor-pointer whitespace-nowrap">
+                Apply as custom order
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex flex-col gap-1">
           <span className={labelCls}>Names</span>
           <button type="button" aria-pressed={wrapAll} onClick={() => onWrapAllChange(!wrapAll)}
