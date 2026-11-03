@@ -84,3 +84,17 @@ test('deadline mismatch and align', () => {
   assert.equal(deadlineIssue(withBars(), { id: 1, deadline: null } as Task), null);
   assert.equal(formatWeekdayDayMonth('2026-12-18'), 'Fri 18/12');
 });
+
+// ── Export download helpers ───────────────────────────────────────────────────
+import { fileNameFromDisposition, requestBlob } from '../src/api/request';
+
+test('export file name comes from Content-Disposition (UTF-8 form preferred)', () => {
+  assert.equal(fileNameFromDisposition(`attachment; filename="Lancement e - 2026-11-03.xlsx"; filename*=UTF-8''Lancement%20%C3%A9%20-%202026-11-03.xlsx`), 'Lancement é - 2026-11-03.xlsx');
+  assert.equal(fileNameFromDisposition('attachment; filename="Plain - 2026-11-03.xlsx"'), 'Plain - 2026-11-03.xlsx');
+  assert.equal(fileNameFromDisposition('attachment; filename=bare.xlsx'), 'bare.xlsx');
+  assert.equal(fileNameFromDisposition(null), null);
+});
+
+test('downloads refuse to run without a session', async () => {
+  await assert.rejects(requestBlob('/api/plannings/1/export.xlsx'), (e: Error & { status?: number }) => e.status === 401);
+});

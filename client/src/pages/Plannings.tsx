@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { usePlanningsList, useUpdatePlanning, useDeletePlanning } from '../hooks/usePlannings';
+import { useEffect, useRef, useState } from 'react';
+import { usePlanningsList, useUpdatePlanning, useDeletePlanning, useExportPlanning, readExportLang } from '../hooks/usePlannings';
+import { DownloadIcon } from '../components/planning/ExportDialog';
+import { PlanningToast } from '../components/planning/PlanningToast';
 import { useSections } from '../hooks/useSections';
 import { NewPlanningModal } from '../components/planning/NewPlanningModal';
 import { Spinner } from '../components/ui/Spinner';
@@ -24,6 +26,7 @@ export function Plannings({ onOpen }: PlanningsProps) {
   const { data: plannings = [], isLoading } = usePlanningsList();
   const { sections } = useSections();
   const [showNew, setShowNew] = useState(false);
+  const [error, setError] = useState<{ id: number; message: string } | null>(null);
 
   return (
     <div className="max-w-4xl mx-auto px-4 pt-20 pb-8 md:pt-8">
@@ -60,10 +63,13 @@ export function Plannings({ onOpen }: PlanningsProps) {
       {!isLoading && plannings.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
           {plannings.map(p => (
-            <PlanningCard key={p.id} planning={p} section={sections.find(s => s.id === p.sectionId)} onOpen={() => onOpen(p.id)} />
+            <PlanningCard key={p.id} planning={p} section={sections.find(s => s.id === p.sectionId)} onOpen={() => onOpen(p.id)}
+              onExportError={message => setError({ id: Date.now(), message })} />
           ))}
         </div>
       )}
+
+      {error && <PlanningToast key={error.id} message={error.message} tone="error" onDone={() => setError(null)} />}
 
       {showNew && (
         <NewPlanningModal
@@ -75,9 +81,17 @@ export function Plannings({ onOpen }: PlanningsProps) {
   );
 }
 
-function PlanningCard({ planning, section, onOpen }: { planning: PlanningSummary; section?: Section; onOpen: () => void }) {
+function PlanningCard({ planning, section, onOpen, onExportError }: {
+  planning: PlanningSummary; section?: Section; onOpen: () => void; onExportError: (message: string) => void;
+}) {
   const updatePlanning = useUpdatePlanning();
   const deletePlanning = useDeletePlanning();
+  const exportPlanning = useExportPlanning();
+  // Default options, no dialog: last language used, every owner, done items included.
+  const exportNow = () => exportPlanning.mutate(
+    { id: planning.id, options: { lang: readExportLang(), includeDone: true } },
+    { onError: e => onExportError(`Export failed: ${e instanceof Error ? e.message : 'unknown error'}`) },
+  );
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(planning.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -133,16 +147,11 @@ function PlanningCard({ planning, section, onOpen }: { planning: PlanningSummary
         </div>
 
         {!renaming && !confirmDelete && (
-          <div className="flex items-center flex-shrink-0 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100 transition-opacity">
-            <button onClick={e => { stop(e); setDraft(planning.name); setRenaming(true); }} title="Rename" aria-label="Rename planning"
-              className={`${iconBtn} hover:text-teal-600 dark:hover:text-teal-400`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-            </button>
-            <button onClick={e => { stop(e); setConfirmDelete(true); }} title="Delete" aria-label="Delete planning"
-              className={`${iconBtn} hover:text-red-600 dark:hover:text-red-400`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </button>
-          </div>
+          <CardMenu label={`Options for ${planning.name}`} busy={exportPlanning.isPending} items={[
+            { label: exportPlanning.isPending ? 'Exporting…' : 'Export Excel', icon: <DownloadIcon />, onSelect: exportNow, disabled: exportPlanning.isPending },
+            { label: 'Rename', onSelect: () => { setDraft(planning.name); setRenaming(true); } },
+            { label: 'Delete', danger: true, onSelect: () => setConfirmDelete(true) },
+          ]} />
         )}
       </div>
 
@@ -158,6 +167,48 @@ function PlanningCard({ planning, section, onOpen }: { planning: PlanningSummary
             className="ml-auto px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer">Yes, delete</button>
           <button onClick={() => setConfirmDelete(false)}
             className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 dark:text-gray-300 cursor-pointer">Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface CardMenuItem { label: string; icon?: React.ReactNode; danger?: boolean; disabled?: boolean; onSelect: () => void }
+
+/** "⋯" menu of a card. Clicks never reach the card (which opens the planning). */
+function CardMenu({ label, items, busy }: { label: string; items: CardMenuItem[]; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  return (
+    <div ref={root} className="relative flex-shrink-0" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} aria-label={label} title="Options"
+        className={`${iconBtn} hover:text-gray-700 dark:hover:text-zinc-200 ${busy ? 'text-teal-600' : ''}`}>
+        {busy ? <Spinner size="sm" /> : (
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" />
+          </svg>
+        )}
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-full mt-1 z-30 w-44 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl">
+          {items.map(item => (
+            <button key={item.label} role="menuitem" disabled={item.disabled}
+              onClick={() => { setOpen(false); item.onSelect(); }}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm disabled:opacity-50 cursor-pointer
+                ${item.danger ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.06]'}`}>
+              {item.icon ?? <span className="w-4" />}
+              {item.label}
+            </button>
+          ))}
         </div>
       )}
     </div>

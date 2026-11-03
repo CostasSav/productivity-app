@@ -1211,6 +1211,12 @@ export const db = {
   deletePlanning(id: number): void {
     mutate(data => planning.deletePlanning(data, id));
   },
+  /** One consistent read for exports; never saves. */
+  getPlanningExportData(id: number): { planning: PlanningDetail; tasks: Task[] } | undefined {
+    const data = load();
+    const detail = planning.getPlanningDetail(data, id);
+    return detail && { planning: detail, tasks: data.tasks };
+  },
   getPlanningMissingTasks(id: number): Task[] {
     return planning.missingTasks(load(), id);
   },

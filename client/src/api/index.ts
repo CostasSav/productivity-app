@@ -3,7 +3,7 @@ import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, P
 interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
 interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
 
-import { request } from './request';
+import { request, requestBlob } from './request';
 
 export const api = {
   sections: {
@@ -180,6 +180,12 @@ export const api = {
     ignoreTasks: (id: number, taskIds: number[]) =>
       request<Planning>(`/api/plannings/${id}/ignore-tasks`, { method: 'POST', body: JSON.stringify(taskIds) }),
     clearIgnoredTasks: (id: number) => request<Planning>(`/api/plannings/${id}/ignored-tasks`, { method: 'DELETE' }),
+    /** Excel file (read-only on the server). */
+    exportXlsx: (id: number, options: { lang: 'fr' | 'en'; owner?: string; includeDone: boolean }) => {
+      const q = new URLSearchParams({ lang: options.lang, includeDone: String(options.includeDone) });
+      if (options.owner) q.set('owner', options.owner);
+      return requestBlob(`/api/plannings/${id}/export.xlsx?${q}`);
+    },
   },
   planningGroups: {
     create: (data: { planningId: number; name: string; collapsed?: boolean }) =>

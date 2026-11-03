@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useUpdatePlanning } from '../../hooks/usePlannings';
 import { useMobile } from '../../hooks/useMobile';
 import { InlineText } from './InlineText';
+import { ExportDialog, DownloadIcon } from './ExportDialog';
 import { mondayOf, formatPlanningRange } from '../../utils/planning';
 import type { PlanningDetail, PlanningLegendEntry, Section } from '../../types';
 
@@ -26,10 +27,12 @@ interface PlanningToolbarProps {
   onShowIgnored: () => void;
   wrapAll: boolean;
   onWrapAllChange: (wrap: boolean) => void;
+  onExportError: (message: string) => void;
   onBack: () => void;
 }
 
-export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onShowIgnored, wrapAll, onWrapAllChange, onBack }: PlanningToolbarProps) {
+export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onShowIgnored, wrapAll, onWrapAllChange, onExportError, onBack }: PlanningToolbarProps) {
+  const [exporting, setExporting] = useState(false);
   const updatePlanning = useUpdatePlanning();
   const isMobile = useMobile();
   // On phones the controls fold away so the timeline keeps most of the screen.
@@ -53,6 +56,11 @@ export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwne
           ) : <span className="italic">No section</span>}
         </span>
         <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+          <button onClick={() => setExporting(true)} title="Export to Excel" aria-label="Export Excel"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.06] cursor-pointer">
+            <DownloadIcon />
+            <span className="hidden sm:inline">Export Excel</span>
+          </button>
           {isMobile && (
             <button onClick={() => setShowControls(s => !s)} aria-expanded={showControls}
               className="px-2 py-1 rounded border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
@@ -66,6 +74,12 @@ export function PlanningToolbar({ planning, section, owners, ownerFilter, onOwne
           }] : []} />
         </div>
       </div>
+
+      {exporting && (
+        <ExportDialog planningId={planning.id} owners={owners}
+          initialOwner={ownerFilter !== ALL_OWNERS && ownerFilter !== UNASSIGNED ? ownerFilter : undefined}
+          onError={onExportError} onClose={() => setExporting(false)} />
+      )}
 
       {(!isMobile || showControls) && <div className="flex flex-wrap items-end gap-x-5 gap-y-3 mt-3">
         <label className="flex flex-col gap-1">

@@ -1,7 +1,9 @@
 import { Router, type ErrorRequestHandler, type Request } from 'express';
 import { db } from '../db/database';
 import { PlanningError } from '../db/planning';
-import { CompletionError } from '../db/completion';
+import { CompletionError, habitZone } from '../db/completion';
+import { widgetCalendarDate } from '../widgets/snapshot';
+import { buildPlanningWorkbook, exportFileName, writePlanningXlsx, type ExportLang } from '../exports/planningXlsx';
 
 // All validation lives in db/planning.ts and surfaces as PlanningError(400/404/409).
 
@@ -43,6 +45,35 @@ planningsRouter.patch('/:id', (req, res) => {
 planningsRouter.delete('/:id', (req, res) => {
   db.deletePlanning(id(req));
   res.status(204).send();
+});
+
+// Excel export (read-only). Query: lang=fr|en (fr), owner=<owner>, includeDone=true|false (true).
+planningsRouter.get('/:id/export.xlsx', async (req, res, next) => {
+  try {
+    const lang = req.query.lang ?? 'fr';
+    const includeDone = req.query.includeDone ?? 'true';
+    const owner = req.query.owner;
+    if (lang !== 'fr' && lang !== 'en') { res.status(400).json({ error: 'lang must be fr or en' }); return; }
+    if (includeDone !== 'true' && includeDone !== 'false') { res.status(400).json({ error: 'includeDone must be true or false' }); return; }
+    if (owner !== undefined && (typeof owner !== 'string' || owner.length > 100)) { res.status(400).json({ error: 'invalid owner' }); return; }
+    const found = db.getPlanningExportData(id(req));
+    if (!found) { res.status(404).json({ error: 'Planning not found' }); return; }
+    // "Today" in the user's zone (same as the widgets), for the export date and current week.
+    const today = widgetCalendarDate(new Date().toISOString(), habitZone())!;
+    const { planning } = found;
+    const workbook = buildPlanningWorkbook(planning, planning.groups, planning.items, found.tasks, {
+      lang: lang as ExportLang, owner: owner as string | undefined, includeDone: includeDone === 'true', today,
+    });
+    const buffer = await writePlanningXlsx(workbook);
+    const fileName = exportFileName(planning.name, today);
+    // ASCII fallback for old clients, exact UTF-8 name for everyone else (RFC 6266 / 5987).
+    const ascii = fileName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Section tasks the planning doesn't contain yet (and hasn't ignored), by deadline.

@@ -56,7 +56,7 @@ export function mondayOf(day: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function weeksBetween(fromMonday: string, toMonday: string): number {
+export function weeksBetween(fromMonday: string, toMonday: string): number {
   return Math.round((Date.parse(toMonday) - Date.parse(fromMonday)) / (7 * 86400000));
 }
 
@@ -504,7 +504,7 @@ export function deleteItem(data: PlanningData, id: number, at: string): void {
 // Only a user's segment action that moves that week updates the task; nothing
 // is ever recomputed from existing bars.
 
-function addDays(day: string, days: number): string {
+export function addDays(day: string, days: number): string {
   const d = new Date(`${day}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
@@ -654,6 +654,29 @@ export function detachDeletedTask(data: PlanningData, taskId: number, subtaskId?
 
 export function detachDeletedSection(data: PlanningData, sectionId: number) {
   data.plannings.forEach(p => { if (p.sectionId === sectionId) p.sectionId = null; });
+}
+
+// ── Read-only views of an item (same rules as client/src/utils/planning.ts) ──
+
+/** Live task/subtask title when the link resolves, else the stored snapshot. */
+export function itemTitle(tasks: Task[], item: PlanningItem): string {
+  return linkTarget({ tasks }, item.taskId, item.subtaskId)?.title ?? item.title;
+}
+
+/** Linked: 100 when the task is done, subtask rows follow their subtask, else % of done subtasks. Standalone: stored progress. */
+export function itemProgress(tasks: Task[], item: PlanningItem): number {
+  const target = linkTarget({ tasks }, item.taskId, item.subtaskId);
+  if (!target) return item.progress;
+  if (target.task.status === 'done') return 100;
+  if (target.subtask) return target.subtask.status === 'done' ? 100 : 0;
+  return taskProgress(target.task);
+}
+
+/** Same "done" as the row checkbox: the linked task/subtask (or its done parent), else 100% for standalone items. */
+export function itemDone(tasks: Task[], item: PlanningItem): boolean {
+  const target = linkTarget({ tasks }, item.taskId, item.subtaskId);
+  if (!target) return item.progress === 100;
+  return target.task.status === 'done' || target.subtask?.status === 'done';
 }
 
 /** Same rule as the client helper: done → 100, else % of done subtasks, else 0. */

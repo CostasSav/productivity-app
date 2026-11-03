@@ -47,6 +47,34 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
   } finally { pending.delete(controller); }
 }
 
+/** File name from Content-Disposition, preferring the UTF-8 filename* form (RFC 6266). */
+export function fileNameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const extended = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+  if (extended) {
+    try { return decodeURIComponent(extended[1].trim()); } catch { /* fall through */ }
+  }
+  return /filename\s*=\s*"([^"]*)"/i.exec(header)?.[1] ?? /filename\s*=\s*([^;]+)/i.exec(header)?.[1]?.trim() ?? null;
+}
+
+/** GET a file (e.g. an export) with the same session handling as request(). */
+export async function requestBlob(url: string): Promise<{ blob: Blob; fileName: string | null }> {
+  if (!authenticated) throw new ApiError(401, 'Please sign in');
+  const started = generation;
+  const controller = new AbortController();
+  pending.add(controller);
+  try {
+    const res = await fetch(url, { signal: controller.signal, credentials: 'same-origin', cache: 'no-store' });
+    if (started !== generation) throw new DOMException('Session changed', 'AbortError');
+    if (!res.ok) {
+      if (res.status === 401) clearSession();
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, body?.error ?? `Request failed: ${res.status}`);
+    }
+    return { blob: await res.blob(), fileName: fileNameFromDisposition(res.headers.get('Content-Disposition')) };
+  } finally { pending.delete(controller); }
+}
+
 function acceptSession(info: SessionInfo) {
   if (typeof info.authenticated !== 'boolean' || typeof info.csrfToken !== 'string' || !info.csrfToken) {
     throw new Error('Unable to connect to the authentication service.');

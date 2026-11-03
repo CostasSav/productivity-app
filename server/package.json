@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "upload-db": "tsx src/upload-db.ts",
-    "test": "tsx --test tests/auth.test.ts tests/database.test.ts tests/widgets.test.ts tests/actions.test.ts tests/plannings.test.ts",
+    "test": "tsx --test tests/auth.test.ts tests/database.test.ts tests/widgets.test.ts tests/actions.test.ts tests/plannings.test.ts tests/planningXlsx.test.ts",
     "widget:token": "tsx scripts/generate-widget-token.ts",
     "widget:action-token": "tsx scripts/generate-widget-token.ts",
     "auth:setup": "tsx scripts/setup-auth.ts",
@@ -16,10 +16,12 @@
     "@anthropic-ai/sdk": "^0.52.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
+    "exceljs": "^4.4.0",
     "express": "^4.22.3",
     "express-rate-limit": "^8.5.2",
     "express-session": "^1.19.0",
-    "helmet": "^8.2.0"
+    "helmet": "^8.2.0",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.0",

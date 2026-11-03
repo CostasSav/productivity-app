@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useClearIgnoredTasks, useMissingTasks, usePlanning } from '../hooks/usePlannings';
 import { useSections } from '../hooks/useSections';
 import { useTasksContext } from '../context/TasksContext';
@@ -8,6 +8,7 @@ import { TaskForm } from '../components/tasks/TaskForm';
 import { PlanningToolbar, ALL_OWNERS } from '../components/planning/PlanningToolbar';
 import { PlanningGrid } from '../components/planning/PlanningGrid';
 import { ReviewMissingTasksModal } from '../components/planning/ReviewMissingTasksModal';
+import { PlanningToast, type ToastAction } from '../components/planning/PlanningToast';
 import { formatWeekdayDayMonth, indexTasks } from '../utils/planning';
 import type { Task } from '../types';
 
@@ -17,8 +18,6 @@ interface PlanningViewProps {
 }
 
 const HIGHLIGHT_MS = 2600;
-const TOAST_MS = 3000;
-const TOAST_ACTION_MS = 6000;
 
 export function PlanningView({ id, onBack }: PlanningViewProps) {
   const { data: planning, isLoading, isError } = usePlanning(id);
@@ -35,7 +34,7 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
   const [confirmShowIgnored, setConfirmShowIgnored] = useState(false);
   const [highlight, setHighlight] = useState<ReadonlySet<number>>(() => new Set());
   // Each toast gets its own id so a repeat message restarts the timer, but re-renders don't.
-  const [toast, setToast] = useState<{ id: number; message: string; action?: { label: string; run: () => void } } | null>(null);
+  const [toast, setToast] = useState<{ id: number; message: string; action?: ToastAction; tone?: 'neutral' | 'error' } | null>(null);
 
   useEffect(() => {
     if (!highlight.size) return;
@@ -75,7 +74,8 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
     <div className="h-full flex flex-col">
       <PlanningToolbar planning={planning} section={section} owners={owners}
         ownerFilter={activeFilter} onOwnerFilterChange={setOwnerFilter} brush={brush} onBrushChange={setBrushIndex}
-        onShowIgnored={() => setConfirmShowIgnored(true)} wrapAll={wrapAll} onWrapAllChange={setWrapAll} onBack={onBack} />
+        onShowIgnored={() => setConfirmShowIgnored(true)} wrapAll={wrapAll} onWrapAllChange={setWrapAll}
+        onExportError={message => setToast({ id: Date.now(), message, tone: 'error' })} onBack={onBack} />
 
       {missingCount > 0 && section && (
         <div role="status" className="flex-shrink-0 flex items-center gap-3 px-4 md:px-6 py-2 border-b border-teal-100 dark:border-teal-500/10 bg-teal-50/70 dark:bg-teal-500/[0.06] text-sm">
@@ -150,33 +150,12 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
         </Modal>
       )}
 
-      {toast && <PlanningToast key={toast.id} message={toast.message} action={toast.action} onDone={() => setToast(null)} />}
+      {toast && <PlanningToast key={toast.id} message={toast.message} action={toast.action} tone={toast.tone} onDone={() => setToast(null)} />}
 
       {editingTask && (
         // Editing here changes the real task on purpose; the planning only reads it.
         <TaskForm initial={editingTask} sections={sections} onCreateSection={createSection}
           onSave={data => updateTask(editingTask.id, data)} onClose={() => setEditingTask(null)} />
-      )}
-    </div>
-  );
-}
-
-/** Same pill style as the Sleep page toast; an action (Undo) keeps it up a little longer. */
-function PlanningToast({ message, action, onDone }: { message: string; action?: { label: string; run: () => void }; onDone: () => void }) {
-  const done = useRef(onDone);
-  done.current = onDone;
-  useEffect(() => {
-    const t = setTimeout(() => done.current(), action ? TOAST_ACTION_MS : TOAST_MS);
-    return () => clearTimeout(t);
-  }, [action]);
-  return (
-    <div role="status" className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-gray-900 dark:bg-zinc-700 text-white text-sm pl-4 pr-2 py-2 rounded-full shadow-lg z-50 animate-fade-in max-w-[calc(100vw-2rem)]">
-      <span className={action ? 'min-w-0' : 'pr-2 text-center'}>{message}</span>
-      {action && (
-        <button onClick={() => { action.run(); done.current(); }}
-          className="flex-shrink-0 px-3 py-1 rounded-full text-sm font-semibold text-teal-300 hover:bg-white/10 cursor-pointer">
-          {action.label}
-        </button>
       )}
     </div>
   );

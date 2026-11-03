@@ -21,7 +21,8 @@ import {
 import { localDateStr } from '../../utils/habitStats';
 import type { DeadlineSync, PlanningDetail, PlanningGroup, PlanningItem, PlanningItemUpdate, PlanningSegment, Task } from '../../types';
 
-// Layout: one scroll container. The left panel is `sticky left-0` and the
+// Layout: one scroll container. Only the Title column is `sticky left-0` (Owner
+// and Progress scroll with the timeline, under it), and the
 // header `sticky top-0`, so both stay frozen without any JS scroll syncing.
 // Week shading, month lines and the current-week outline live in a single
 // absolute overlay behind the rows.
@@ -206,7 +207,7 @@ export function PlanningGrid({
   useEffect(() => {
     if (scrolledFor.current === planning.id || !scrollRef.current) return;
     scrolledFor.current = planning.id;
-    if (inRange(currentIdx)) scrollRef.current.scrollLeft = Math.max(0, (currentIdx - 2) * WEEK_W);
+    if (inRange(currentIdx)) scrollRef.current.scrollLeft = Math.max(0, leftW - cols.title + (currentIdx - 2) * WEEK_W);
   }, [planning.id, currentIdx]);
 
   // ── Highlight (e.g. just-imported rows) and bring the first one into view ──
@@ -235,13 +236,14 @@ export function PlanningGrid({
     let left = el.scrollLeft;
     const row = rows[index];
     if (row.kind === 'item' && row.item.segments.length) {
-      const x = col(row.item.segments[0].start) * WEEK_W;
-      if (x < el.scrollLeft || x + WEEK_W > el.scrollLeft + el.clientWidth - leftW) left = Math.max(0, x - 2 * WEEK_W);
+      const x = leftW + col(row.item.segments[0].start) * WEEK_W; // content x of the bar
+      if (x < el.scrollLeft + cols.title || x + WEEK_W > el.scrollLeft + el.clientWidth) left = Math.max(0, x - cols.title - 2 * WEEK_W);
     }
     el.scrollTo({ top, left, behavior: 'smooth' });
   }, [highlightKey, rows, layout]);
 
-  const drag = usePointerDrag(scrollRef, () => ({ left: leftW, top: headerH }));
+  // Auto-scroll starts where the frozen Title column ends.
+  const drag = usePointerDrag(scrollRef, () => ({ left: cols.title, top: headerH }));
 
   /** Real row boxes (expanded rows are taller); falls back to the nominal layout before render. */
   const measureLayout = () => {
@@ -521,10 +523,11 @@ export function PlanningGrid({
 
         {/* ── Header ── */}
         <div className={`sticky top-0 z-20 flex flex-shrink-0 ${panelBg} border-b border-gray-200 dark:border-zinc-700`} style={{ height: headerH }}>
-          <div className={`sticky left-0 z-30 flex items-end ${panelBg} border-r border-gray-200 dark:border-zinc-700`} style={{ width: leftW }}>
-            {(['Title', 'Owner', isMobile ? '%' : 'Progress'] as const).map((label, i) => (
+          {/* Header cells sit directly in the header row: a sticky cell can't leave its parent box. */}
+          {(['Title', 'Owner', isMobile ? '%' : 'Progress'] as const).map((label, i) => (
               <div key={label} style={{ width: [cols.title, cols.owner, cols.progress][i] }}
-                className={`relative self-stretch flex items-end px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400 ${i ? colBorder : ''}`}>
+                className={`relative self-stretch flex items-end px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400 ${panelBg}
+                  ${i === 0 ? 'sticky left-0 z-30 border-r border-gray-200 dark:border-zinc-700' : i === 2 ? 'border-r border-gray-200 dark:border-zinc-700' : ''}`}>
                 <span className="truncate">{label}</span>
                 {i === 0 && !isMobile && (
                   <div role="separator" aria-orientation="vertical" aria-label="Resize the Title column" tabIndex={0}
@@ -545,7 +548,6 @@ export function PlanningGrid({
                 )}
               </div>
             ))}
-          </div>
 
           <div className="relative" style={{ width: timelineW }}>
             {months.map(m => (
@@ -612,7 +614,7 @@ export function PlanningGrid({
               return (
                 <div key={`g${g.id}`} data-row={`g${g.id}`} className={`group flex ${rowBorder} transition-colors duration-700 ${lit ? highlightRow : ''} ${pending || dragged ? 'opacity-40' : ''}`} style={{ minHeight: ROW_H + GROUP_GAP }}>
                   <div className={`sticky left-0 z-10 flex items-center gap-0.5 px-0.5 transition-colors duration-700 ${lit ? highlightPanel : panelBg} border-r border-gray-200 dark:border-zinc-700`}
-                    style={{ width: leftW, paddingTop: GROUP_GAP + 2, paddingBottom: 2 }}>
+                    style={{ width: cols.title, paddingTop: GROUP_GAP + 2, paddingBottom: 2 }}>
                     <Grip disabled={pending || filtering} label={`Reorder group ${g.name}`} hint={reorderHint}
                       onPointerDown={e => onGripPointerDown(e, { kind: 'group', id: g.id })} />
                     <button type="button" disabled={pending} aria-expanded={!g.collapsed}
@@ -642,7 +644,9 @@ export function PlanningGrid({
                       </button>
                     )}
                   </div>
-                  <div className="relative" style={{ width: timelineW, paddingTop: GROUP_GAP }}>
+                  <div aria-hidden className="border-r border-gray-200 dark:border-zinc-700" style={{ width: cols.owner + cols.progress }} />
+                  {/* Clipped like item rows, so bars past the last week never widen the scroll area. */}
+                  <div className="relative overflow-hidden" style={{ width: timelineW, paddingTop: GROUP_GAP }}>
                     {summary && (
                       <div aria-hidden className="absolute h-1.5 rounded-full bg-gray-400/80 dark:bg-zinc-500"
                         style={{ left: summary.left + 2, width: summary.width - 4, top: `calc(50% + ${GROUP_GAP / 2 - 3}px)` }} />
@@ -698,7 +702,7 @@ export function PlanningGrid({
             return (
               <div key={row.kind === 'add-item' ? `a${row.groupId}` : 'add-root'} data-row="add" className="flex" style={{ height: ADD_ROW_H }}>
                 <div className={`sticky left-0 z-10 flex items-center gap-1 ${panelBg} border-r border-gray-200 dark:border-zinc-700`}
-                  style={{ width: leftW, paddingLeft: row.kind === 'add-item' ? NEST_INDENT + 16 : 4 }}>
+                  style={{ width: cols.title, paddingLeft: row.kind === 'add-item' ? NEST_INDENT + 16 : 4 }}>
                   {row.kind === 'add-item' ? (
                     <AddInline label="+ Item" placeholder="New item title" onAdd={addItem(row.groupId)} />
                   ) : (
@@ -708,6 +712,7 @@ export function PlanningGrid({
                     </>
                   )}
                 </div>
+                <div aria-hidden className="border-r border-gray-200 dark:border-zinc-700" style={{ width: cols.owner + cols.progress }} />
               </div>
             );
           })}
@@ -831,7 +836,7 @@ function ItemRow({
 
   return (
     <div data-row={`i${item.id}`} className={`group flex ${rowBorder} transition-colors duration-700 ${highlighted ? highlightRow : ''} ${pending || dragged ? 'opacity-40' : ''}`} style={{ minHeight: ROW_H }}>
-      <div className={`sticky left-0 z-10 flex items-stretch transition-colors duration-700 ${highlighted ? highlightPanel : `${panelBg} group-hover:bg-gray-50 dark:group-hover:bg-[#131316]`} border-r border-gray-200 dark:border-zinc-700`} style={{ width: leftW }}>
+      <div className={`sticky left-0 z-10 flex items-stretch transition-colors duration-700 ${highlighted ? highlightPanel : `${panelBg} group-hover:bg-gray-50 dark:group-hover:bg-[#131316]`} border-r border-gray-200 dark:border-zinc-700`} style={{ width: cols.title }}>
         <div className={`flex items-center gap-0.5 min-w-0 pr-1 ${expanded ? 'py-1' : ''}`} style={{ width: cols.title, paddingLeft: nested ? NEST_INDENT - 14 : 2 }}>
           <Grip disabled={pending || reorderDisabled} label={`Reorder ${title}`} hint={reorderHint} onPointerDown={onGripPointerDown} />
           <DoneBox checked={done} disabled={pending || doneDisabled} label={`Mark ${title} done`} hint={doneHint} onChange={onToggleDone} />
@@ -867,7 +872,10 @@ function ItemRow({
             </button>
           )}
         </div>
-        <div className={`flex items-center px-0.5 min-w-0 ${colBorder}`} style={{ width: cols.owner }}>
+      </div>
+      {/* Owner and Progress scroll with the timeline. */}
+      <div className={`flex items-stretch transition-colors duration-700 ${highlighted ? '' : 'group-hover:bg-gray-50 dark:group-hover:bg-[#131316]'} border-r border-gray-200 dark:border-zinc-700`} style={{ width: leftW - cols.title }}>
+        <div className="flex items-center px-0.5 min-w-0" style={{ width: cols.owner }}>
           <InlineText value={item.owner ?? ''} placeholder="—" disabled={pending} listId={ownersListId} maxLength={100}
             ariaLabel="Owner" onCommit={owner => onUpdate({ owner: owner || null })}
             className="text-xs text-gray-600 dark:text-zinc-300 w-full" inputClassName="text-xs" />

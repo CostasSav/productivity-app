@@ -484,3 +484,32 @@ export function useClearIgnoredTasks() {
     },
   });
 }
+
+// ── Excel export ──────────────────────────────────────────────────────────────
+
+export type ExportLang = 'fr' | 'en';
+const EXPORT_LANG_KEY = 'planning_export_lang';
+
+/** Last language chosen for exports (French by default). */
+export function readExportLang(): ExportLang {
+  try { return localStorage.getItem(EXPORT_LANG_KEY) === 'en' ? 'en' : 'fr'; } catch { return 'fr'; }
+}
+
+/** Fetches the file as a blob (so errors surface) and hands it to the browser as a download. */
+export function useExportPlanning() {
+  return useMutation({
+    mutationFn: async ({ id, options }: { id: number; options: { lang: ExportLang; owner?: string; includeDone: boolean } }) => {
+      try { localStorage.setItem(EXPORT_LANG_KEY, options.lang); } catch { /* private mode: not remembered */ }
+      const { blob, fileName } = await api.plannings.exportXlsx(id, options);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName ?? 'planning.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Give the browser time to start the download before releasing the blob.
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    },
+  });
+}
