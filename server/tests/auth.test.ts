@@ -61,7 +61,7 @@ async function fixture(t: TestContext, overrides: Partial<AuthConfig> = {}) {
 
 test('all mounted private APIs and future paths reject unauthenticated requests without creating sessions', async t => {
   const f = await fixture(t);
-  assert.equal(privatePaths.length, 21);
+  assert.equal(privatePaths.length, 22);
   for (const url of [...privatePaths, '/api/future-route']) {
     for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) {
       const response = await f.call(url, method);

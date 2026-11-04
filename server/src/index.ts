@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import path from 'path';
 import tasksRouter from './routes/tasks';
 import notesRouter from './routes/notes';
 import aiRouter from './routes/ai';
@@ -15,12 +16,22 @@ import { db, prepareDatabase } from './db/database';
 import { readWidgetConfig, readWidgetActionConfig } from './widgets/config';
 import { readAuthConfig } from './auth/config';
 import { createApiApp } from './app';
+import { readCalendarConfig } from './calendar/config';
+import { CalendarService, calendarCacheDir } from './calendar/service';
+import { createCalendarRouter } from './calendar/router';
 
 // Validate authentication before any startup database work.
-const app = createApiApp(readAuthConfig(), { config: readWidgetConfig(), read: () => db.getWidgetData(),
+const authConfig = readAuthConfig();
+const app = createApiApp(authConfig, { config: readWidgetConfig(), read: () => db.getWidgetData(),
   actionConfig: readWidgetActionConfig(), complete: (...args) => db.widgetCompletion(...args) });
 
 prepareDatabase();
+
+// Read-only external calendars. Invalid configuration disables only this feature, never startup.
+const calendar = new CalendarService(readCalendarConfig(), {
+  cacheDir: calendarCacheDir(process.env.DATA_DIR ?? path.join(__dirname, '../data'), authConfig.sessionDir),
+});
+calendar.loadCache();
 
 const PORT = process.env.PORT ?? 3001;
 
@@ -45,7 +56,9 @@ app.use('/api/book-learnings', bookLearningsRouter);
 app.use('/api/plannings', planningsRouter);
 app.use('/api/planning-groups', planningGroupsRouter);
 app.use('/api/planning-items', planningItemsRouter);
+app.use('/api/calendar', createCalendarRouter(calendar));
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  calendar.start();
 });
