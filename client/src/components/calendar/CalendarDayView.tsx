@@ -1,6 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import type { Task, Section } from '../../types';
 import { TaskForm } from '../tasks/TaskForm';
+import { ConflictBadge } from './CalendarTimeGrid';
+import { useCalendarEvents } from '../../hooks/useCalendar';
+import { localTodayStr, offsetDay, parseDateKey, weekOf } from '../../utils/date';
+import { eventInterval, filterEventsForRange, findConflicts, formatDayRange } from '../../utils/calendarLayout';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -12,25 +16,8 @@ const PRIORITY_COLOR: Record<string, string> = { high: '#f87171', medium: '#fbbf
 const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 const PRIORITY_LABEL: Record<string, string> = { high: 'High', medium: 'Medium', low: 'Low' };
 
-function localTodayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function offsetDay(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function weekOf(dateStr: string): string[] {
-  const d = new Date(dateStr + 'T00:00:00');
-  const monday = offsetDay(dateStr, -((d.getDay() + 6) % 7));
-  return Array.from({ length: 7 }, (_, i) => offsetDay(monday, i));
-}
-
 function formatHeading(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = parseDateKey(dateStr);
   return `${DAYS_LONG[d.getDay()]} ${d.getDate()} ${MONTHS_LONG[d.getMonth()]}`;
 }
 
@@ -43,9 +30,11 @@ interface CalendarDayViewProps {
   onUpdateTask: (id: number, data: Partial<Task>) => Promise<unknown>;
   onCreateSection: (name: string, color: string) => Promise<Section>;
   filterSectionId?: number | null;
+  /** Show the external-calendar agenda above the tasks (off on section pages). */
+  showEvents?: boolean;
 }
 
-export function CalendarDayView({ tasks, sections, onCreateTask, onUpdateTask, onCreateSection, filterSectionId }: CalendarDayViewProps) {
+export function CalendarDayView({ tasks, sections, onCreateTask, onUpdateTask, onCreateSection, filterSectionId, showEvents = false }: CalendarDayViewProps) {
   const today = localTodayStr();
   const [selectedDate, setSelectedDate] = useState(today);
   const [creatingForDate, setCreatingForDate] = useState<string | null>(null);
@@ -55,6 +44,14 @@ export function CalendarDayView({ tasks, sections, onCreateTask, onUpdateTask, o
   const weekDays = weekOf(selectedDate);
   const isToday = selectedDate === today;
   const isPast = selectedDate < today;
+
+  // Fetch the whole visible week so swiping within it needs no new request.
+  const calendar = useCalendarEvents(showEvents ? { first: weekDays[0], last: weekDays[6] } : null);
+  const feedsById = useMemo(() => Object.fromEntries(calendar.feeds.map(f => [f.id, f])), [calendar.feeds]);
+  const dayEvents = useMemo(() => filterEventsForRange(calendar.events, selectedDate, selectedDate)
+    .sort((a, b) => Number(b.allDay) - Number(a.allDay) || eventInterval(a)[0] - eventInterval(b)[0] || a.title.localeCompare(b.title)),
+  [calendar.events, selectedDate]);
+  const dayConflicts = useMemo(() => findConflicts(dayEvents), [dayEvents]);
 
   // Tasks for the selected day, sorted high→medium→low then title
   const dayTasks = tasks
@@ -115,7 +112,7 @@ export function CalendarDayView({ tasks, sections, onCreateTask, onUpdateTask, o
       {/* ── 7-day week strip ───────────────────────────────────────── */}
       <div className="flex px-3 pb-3 gap-1 flex-shrink-0 border-b border-gray-100 dark:border-zinc-800/60">
         {weekDays.map(date => {
-          const d = new Date(date + 'T00:00:00');
+          const d = parseDateKey(date);
           const isSelected = date === selectedDate;
           const isTodayPill = date === today;
           const hasTasks = tasks.some(t => {
@@ -157,7 +154,35 @@ export function CalendarDayView({ tasks, sections, onCreateTask, onUpdateTask, o
           setSelectedDate(d => offsetDay(d, delta < 0 ? 1 : -1));
         }}
       >
-        {dayTasks.length === 0 ? (
+        {/* External calendar agenda (read-only) */}
+        {dayEvents.length > 0 && (
+          <section aria-label="Calendar events" className="pt-4">
+            <h2 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Calendar</h2>
+            <ul className="rounded-xl border border-gray-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b] divide-y divide-gray-100 dark:divide-zinc-800/60">
+              {dayEvents.map(event => {
+                const feed = feedsById[event.feedId];
+                const conflict = dayConflicts.has(event.id);
+                return (
+                  <li key={event.id} className="flex items-center gap-2.5 px-3 py-2">
+                    <span className="text-xs font-mono text-gray-500 dark:text-gray-400 w-[104px] flex-shrink-0 leading-tight">{formatDayRange(event, selectedDate)}</span>
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: feed?.color ?? '#6b7280' }} aria-hidden />
+                    <span className="flex-1 min-w-0 text-sm text-gray-800 dark:text-gray-100 truncate">
+                      <span className="sr-only">{feed?.label ?? 'Calendar'}: </span>{event.title}
+                    </span>
+                    {conflict && <><ConflictBadge /><span className="sr-only">, overlaps another calendar</span></>}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {dayTasks.length === 0 && dayEvents.length > 0 ? (
+          <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">
+            No tasks {isToday ? 'for today' : 'for this day'} ·{' '}
+            <button onClick={() => setCreatingForDate(selectedDate)} className="text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">add one</button>
+          </p>
+        ) : dayTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <svg className="w-14 h-14 text-gray-200 dark:text-zinc-700 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2} aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />

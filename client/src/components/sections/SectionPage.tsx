@@ -189,7 +189,7 @@ export function SectionPage({ section, sections, onCreateSection, onEditSection,
 
         {tab === 'calendar' && (
           <div className="h-full overflow-y-auto">
-            <CalendarView tasks={tasks} sections={sections} onUpdateTask={updateTask} onCreateTask={createTask} onCreateSection={onCreateSection} filterSectionId={section.id} />
+            <CalendarView tasks={tasks} sections={sections} onUpdateTask={updateTask} onCreateTask={createTask} onCreateSection={onCreateSection} filterSectionId={section.id} monthOnly />
           </div>
         )}
 

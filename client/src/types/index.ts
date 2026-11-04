@@ -362,3 +362,11 @@ export interface PlanningReorder {
   groups?: { id: number; order: number }[];
   items?: { id: number; order: number; groupId: number | null }[];
 }
+
+// ── External calendars (read-only, from published .ics feeds) ─────────────────
+export type CalendarFeedStatus = 'pending' | 'ok' | 'timeout' | 'http_error' | 'parse_error' | 'disabled';
+export interface CalendarFeedInfo { id: string; label: string; color: string; lastSuccessAt: string | null; status: CalendarFeedStatus }
+/** start/end are UTC ISO strings; all-day events use UTC midnights of their dates with an exclusive end. */
+export interface CalendarEvent { id: string; feedId: string; title: string; start: string; end: string; allDay: boolean }
+export interface CalendarEventsResponse { enabled: boolean; feeds: CalendarFeedInfo[]; events: CalendarEvent[] }
+export interface CalendarRefreshResponse { enabled: boolean; feeds: CalendarFeedInfo[] }

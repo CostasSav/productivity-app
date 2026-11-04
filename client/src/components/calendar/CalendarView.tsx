@@ -1,8 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Task, Section } from '../../types';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { Task, Section, CalendarFeedInfo } from '../../types';
 import { TaskForm } from '../tasks/TaskForm';
 import { CalendarDayView } from './CalendarDayView';
+import { CalendarTimeGrid } from './CalendarTimeGrid';
+import { loadHiddenFeeds, loadMode, saveHiddenFeeds, saveMode, type CalendarMode } from './calendarPrefs';
 import { useMobile } from '../../hooks/useMobile';
+import { useCalendarEvents, useRefreshCalendar, refreshMessage } from '../../hooks/useCalendar';
+import { localTodayStr, offsetDay, parseDateKey, weekOf } from '../../utils/date';
+import { feedWarning } from '../../utils/calendarLayout';
 
 interface CalendarViewProps {
   tasks: Task[];
@@ -11,6 +16,20 @@ interface CalendarViewProps {
   onCreateTask: (data: Partial<Task>) => Promise<unknown>;
   onCreateSection: (name: string, color: string) => Promise<Section>;
   filterSectionId?: number | null;
+  /** Month grid only: no Week/Day switcher and no external calendars (used by SectionPage). */
+  monthOnly?: boolean;
+}
+
+const MODES: { id: CalendarMode; label: string }[] = [
+  { id: 'month', label: 'Month' }, { id: 'week', label: 'Week' }, { id: 'day', label: 'Day' },
+];
+
+function weekTitle(days: string[]): string {
+  const first = parseDateKey(days[0]), last = parseDateKey(days[days.length - 1]);
+  const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
+  const start = first.toLocaleDateString(undefined, sameMonth ? { day: 'numeric' } : { day: 'numeric', month: 'short' });
+  const end = last.toLocaleDateString(undefined, sameMonth ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${start} – ${end}`;
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -52,11 +71,15 @@ function buildCalendar(year: number, month: number): (string | null)[][] {
   return weeks;
 }
 
-export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCreateSection, filterSectionId }: CalendarViewProps) {
+export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCreateSection, filterSectionId, monthOnly = false }: CalendarViewProps) {
   // useMobile must be first so all hooks always run in the same order
   const isMobile = useMobile();
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = localTodayStr();
+  const [mode, setModeState] = useState<CalendarMode>(() => (monthOnly ? 'month' : loadMode()));
+  const [anchor, setAnchor] = useState(today); // focused day for Week/Day
+  const [hiddenFeeds, setHiddenFeeds] = useState<Set<string>>(loadHiddenFeeds);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [month, setMonth] = useState(() => new Date().getMonth());
   const [sectionFilter, setSectionFilter] = useState<number | null | 'all'>('all');
@@ -138,7 +161,60 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
     const now = new Date();
     setYear(now.getFullYear());
     setMonth(now.getMonth());
+    setAnchor(today);
   };
+
+  // ── Week / Day ──────────────────────────────────────────────────────────────
+  const setMode = (next: CalendarMode) => {
+    if (next === mode) return;
+    if (next === 'month') {
+      const d = parseDateKey(anchor);
+      setYear(d.getFullYear());
+      setMonth(d.getMonth());
+    } else if (mode === 'month') {
+      // Entering Week/Day from a month: today if it is in that month, else the 1st.
+      const now = new Date();
+      setAnchor(now.getFullYear() === year && now.getMonth() === month ? today : `${year}-${String(month + 1).padStart(2, '0')}-01`);
+    }
+    setModeState(next);
+    saveMode(next);
+  };
+  const step = mode === 'week' ? 7 : 1;
+  const goPrev = () => (mode === 'month' ? prevMonth() : setAnchor(a => offsetDay(a, -step)));
+  const goNext = () => (mode === 'month' ? nextMonth() : setAnchor(a => offsetDay(a, step)));
+
+  const visibleDays = useMemo(() => (mode === 'week' ? weekOf(anchor) : [anchor]), [mode, anchor]);
+  const timeMode = !isMobile && mode !== 'month';
+  const calendar = useCalendarEvents(timeMode ? { first: visibleDays[0], last: visibleDays[visibleDays.length - 1] } : null);
+  const refresh = useRefreshCalendar();
+  const visibleEvents = useMemo(() => calendar.events.filter(e => !hiddenFeeds.has(e.feedId)), [calendar.events, hiddenFeeds]);
+  const feedsById = useMemo(() => Object.fromEntries(calendar.feeds.map(f => [f.id, f])) as Record<string, CalendarFeedInfo>, [calendar.feeds]);
+
+  const toggleFeed = (id: string) => {
+    setHiddenFeeds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      saveHiddenFeeds(next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (!refreshNote) return;
+    const id = setTimeout(() => setRefreshNote(null), 4000);
+    return () => clearTimeout(id);
+  }, [refreshNote]);
+
+  const runRefresh = () => {
+    refresh.mutate(undefined, {
+      onSuccess: () => setRefreshNote('Calendars refreshed'),
+      onError: error => setRefreshNote(refreshMessage(error)),
+    });
+  };
+
+  const headerTitle = mode === 'week' ? weekTitle(visibleDays)
+    : mode === 'day' ? parseDateKey(anchor).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : `${MONTHS[month]} ${year}`;
 
   const clearEdgeTimer = () => {
     if (edgeTimerRef.current) { clearTimeout(edgeTimerRef.current); edgeTimerRef.current = null; }
@@ -294,6 +370,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
         onUpdateTask={onUpdateTask}
         onCreateSection={onCreateSection}
         filterSectionId={filterSectionId}
+        showEvents={!monthOnly}
       />
     );
   }
@@ -303,8 +380,25 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{MONTHS[month]} {year}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{headerTitle}</h1>
           <button onClick={goToday} className="text-xs px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">Today</button>
+          {!monthOnly && (
+            <div role="group" aria-label="Calendar view" className="inline-flex rounded border border-gray-300 dark:border-gray-600 overflow-hidden">
+              {MODES.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setMode(m.id)}
+                  aria-pressed={mode === m.id}
+                  className={`text-xs px-3 py-1.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500
+                    ${mode === m.id
+                      ? 'bg-gray-700 text-white dark:bg-gray-200 dark:text-gray-800'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          )}
           {selectedTaskIds.size > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 px-2.5 py-1 rounded-full font-medium">
@@ -321,10 +415,10 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex gap-1">
-            <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+            <button onClick={goPrev} aria-label={`Previous ${mode}`} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
             </button>
-            <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
+            <button onClick={goNext} aria-label={`Next ${mode}`} className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
             </button>
           </div>
@@ -366,9 +460,66 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
         </div>
       )}
 
+      {/* External calendar legend: one toggle chip per feed + refresh (Week/Day only) */}
+      {timeMode && calendar.enabled && calendar.feeds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          <span className="text-xs text-gray-400 dark:text-gray-500 mr-1">Calendars:</span>
+          {calendar.feeds.map(feed => {
+            const hidden = hiddenFeeds.has(feed.id);
+            const warning = feedWarning(feed, Date.now());
+            return (
+              <button
+                key={feed.id}
+                onClick={() => toggleFeed(feed.id)}
+                aria-pressed={!hidden}
+                aria-label={`${feed.label}${hidden ? ', hidden' : ', shown'}${warning ? `, ${warning}` : ''}`}
+                title={warning ? `Last sync: ${warning}${feed.status !== 'ok' ? ` (${feed.status.replace('_', ' ')})` : ''}` : undefined}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                style={hidden
+                  ? { backgroundColor: 'transparent', color: feed.color, boxShadow: `inset 0 0 0 1px ${feed.color}66`, opacity: 0.6 }
+                  : { backgroundColor: `${feed.color}24`, color: feed.color }}
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: hidden ? 'transparent' : feed.color, boxShadow: `inset 0 0 0 1.5px ${feed.color}` }} />
+                <span className={hidden ? 'line-through' : ''}>{feed.label}</span>
+                {warning && <span className="font-normal text-amber-600 dark:text-amber-400">· {warning}</span>}
+              </button>
+            );
+          })}
+          <button
+            onClick={runRefresh}
+            disabled={refresh.isPending}
+            aria-label="Refresh calendars"
+            title="Refresh calendars"
+            className="w-7 h-7 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          >
+            <svg className={`w-3.5 h-3.5 ${refresh.isPending ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          </button>
+          <span role="status" className="text-xs text-gray-400 dark:text-gray-500">{refreshNote}</span>
+        </div>
+      )}
+
       {/* Calendar + Backlog row */}
       <div className="flex-1 flex gap-3 min-h-0">
       <div className="flex-1 flex flex-col min-h-0">
+
+      {timeMode && (
+        <CalendarTimeGrid
+          days={visibleDays}
+          today={today}
+          events={visibleEvents}
+          feeds={feedsById}
+          tasksByDate={tasksByDate}
+          renderTask={task => renderTaskPill(task, false)}
+          allDayCellProps={day => ({
+            onDragOver: e => { e.preventDefault(); setDragOverDate(day); },
+            onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverDate(null); },
+            onDrop: e => handleDrop(e, day),
+            className: dragOverDate === day ? 'bg-teal-50 dark:bg-teal-900/20 ring-2 ring-inset ring-teal-300' : '',
+          })}
+        />
+      )}
+
+      {!timeMode && (<>
 
       {/* Calendar grid — horizontally scrollable on narrow viewports */}
       <div className="flex-1 overflow-x-auto min-h-0">
@@ -494,6 +645,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
         </span>
         <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">Shift+click to select · drag to edge to change month</span>
       </div>
+      </>)}{/* end month view */}
 
       </div>{/* end calendar column */}
 

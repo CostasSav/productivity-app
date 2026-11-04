@@ -55,4 +55,8 @@ export const queryKeys = {
   planning: (id: number) => ['plannings', id] as const,
   planningMissingTasksAll: ['planningMissingTasks'] as const,
   planningMissingTasks: (id: number) => ['planningMissingTasks', id] as const,
+
+  // External calendars
+  calendar: ['calendar'] as const,
+  calendarEvents: (from: string, to: string) => ['calendar', 'events', from, to] as const,
 };

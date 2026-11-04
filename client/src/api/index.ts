@@ -1,4 +1,4 @@
-import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, SleepEntry, SleepSettings, SleepStats, Book, BookWithCounts, BookNote, BookQuote, BookQuoteWithBook, BookLearning, BibliothecaSettings, BookStats, OpenLibraryResult, BookStatus, Planning, PlanningSummary, PlanningDetail, PlanningGroup, PlanningItem, PlanningUpdate, PlanningGroupUpdate, PlanningItemUpdate, PlanningSegment, PlanningSegmentInput, PlanningGroupDeleteMode, PlanningReorder, PlanningImportEntry, PlanningImportResult, PlanningSegmentResult } from '../types';
+import type { Task, Note, NoteListItem, ExtractedTask, SummaryResult, Section, PomodoroSession, Habit, HabitLog, GratitudeEntry, GratitudeSettings, GroceryItem, GroceryStaple, SleepEntry, SleepSettings, SleepStats, Book, BookWithCounts, BookNote, BookQuote, BookQuoteWithBook, BookLearning, BibliothecaSettings, BookStats, OpenLibraryResult, BookStatus, Planning, PlanningSummary, PlanningDetail, PlanningGroup, PlanningItem, PlanningUpdate, PlanningGroupUpdate, PlanningItemUpdate, PlanningSegment, PlanningSegmentInput, PlanningGroupDeleteMode, PlanningReorder, PlanningImportEntry, PlanningImportResult, PlanningSegmentResult, CalendarEventsResponse, CalendarRefreshResponse } from '../types';
 
 interface GratitudeStats { currentStreak: number; totalEntries: number; longestStreak: number; completedDates: string[]; }
 interface GratitudeSettingsUpdate { reminderEnabled: boolean; reminderTime: string; onboardingComplete: boolean; resetStreak: boolean; }
@@ -214,5 +214,12 @@ export const api = {
     /** Undo of a synced change: one segment back as it was (null = remove) plus the previous deadline. */
     revertSegment: (itemId: number, data: { segmentId: string; segment: PlanningSegment | null; deadline: string | null }) =>
       request<PlanningItem>(`/api/planning-items/${itemId}/segments/revert`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+  calendar: {
+    /** from/to are inclusive UTC days (YYYY-MM-DD), at most 62 days apart. */
+    events: (from: string, to: string) =>
+      request<CalendarEventsResponse>(`/api/calendar/events?${new URLSearchParams({ from, to })}`),
+    /** Rate-limited to once a minute (429); 409 when no calendars are configured. */
+    refresh: () => request<CalendarRefreshResponse>('/api/calendar/refresh', { method: 'POST' }),
   },
 };

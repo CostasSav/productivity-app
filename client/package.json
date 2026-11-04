@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx --test tests/api.test.ts tests/planning.test.ts",
+    "test": "tsx --test tests/api.test.ts tests/planning.test.ts tests/calendarLayout.test.ts",
     "check:auth": "node scripts/check-auth-build.mjs"
   },
   "dependencies": {

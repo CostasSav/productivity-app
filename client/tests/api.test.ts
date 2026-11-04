@@ -76,3 +76,29 @@ test('misconfigured HTML rewrites and invalid session responses fail closed', as
   await assert.rejects(browserAuth.session(), /authentication service/);
   await assert.rejects(api.tasks.list(), (error: unknown) => error instanceof ApiError && error.status === 401);
 });
+
+test('calendar API: GET events by date range, POST refresh with CSRF, 429/409 surface as ApiError', async t => {
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; clearSession(); });
+  const calls: { url: string; options: RequestInit }[] = [];
+  let refreshStatus = 200;
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes('/api/auth/')) return Response.json({ authenticated: true, csrfToken: 'synthetic-csrf' });
+    if (String(url).endsWith('/refresh')) {
+      return refreshStatus === 200 ? Response.json({ enabled: true, feeds: [] }) : Response.json({ error: 'synthetic' }, { status: refreshStatus });
+    }
+    return Response.json({ enabled: false, feeds: [], events: [] });
+  };
+  await browserAuth.session();
+  assert.deepEqual(await api.calendar.events('2026-11-02', '2026-11-10'), { enabled: false, feeds: [], events: [] });
+  await api.calendar.refresh();
+  for (const status of [429, 409]) {
+    refreshStatus = status;
+    await assert.rejects(api.calendar.refresh(), (error: unknown) => error instanceof ApiError && error.status === status);
+  }
+  assert.deepEqual(calls.slice(1, 3).map(call => [call.url, call.options.method ?? 'GET']),
+    [['/api/calendar/events?from=2026-11-02&to=2026-11-10', 'GET'], ['/api/calendar/refresh', 'POST']]);
+  assert.equal(new Headers(calls[2].options.headers).get('X-CSRF-Token'), 'synthetic-csrf');
+  assert.equal(calls[1].options.credentials, 'same-origin');
+});
