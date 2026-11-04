@@ -2,15 +2,19 @@
   "name": "productivity-server",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "upload-db": "tsx src/upload-db.ts",
-    "test": "tsx --test tests/auth.test.ts tests/database.test.ts tests/widgets.test.ts tests/actions.test.ts tests/plannings.test.ts tests/planningXlsx.test.ts tests/planningSort.test.ts tests/calendar.test.ts",
+    "test": "tsx --test tests/auth.test.ts tests/database.test.ts tests/widgets.test.ts tests/actions.test.ts tests/plannings.test.ts tests/planningXlsx.test.ts tests/planningSort.test.ts tests/calendar.test.ts tests/calendarCheck.test.ts",
     "widget:token": "tsx scripts/generate-widget-token.ts",
     "widget:action-token": "tsx scripts/generate-widget-token.ts",
     "auth:setup": "tsx scripts/setup-auth.ts",
-    "db:init": "tsx scripts/init-database.ts"
+    "db:init": "tsx scripts/init-database.ts",
+    "calendar:check": "tsx scripts/check-calendar-feed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

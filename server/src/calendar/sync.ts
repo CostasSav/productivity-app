@@ -93,10 +93,17 @@ function dateOnly(value: Date): string {
 const valid = (value: unknown): value is Date => value instanceof Date && Number.isFinite(value.getTime());
 
 export function parseFeed(body: string, feedId: string, window: { from: Date; to: Date }, maxEvents = MAX_EVENTS_PER_FEED): CalendarEvent[] {
+  return parseFeedOccurrences(body, feedId, window, maxEvents).map(occurrence => occurrence.event);
+}
+
+/** Same parse, plus whether each occurrence came from a recurring series (used by the owner's check script). */
+export interface ParsedOccurrence { event: CalendarEvent; recurring: boolean }
+
+export function parseFeedOccurrences(body: string, feedId: string, window: { from: Date; to: Date }, maxEvents = MAX_EVENTS_PER_FEED): ParsedOccurrence[] {
   if (!/^\s*BEGIN:VCALENDAR/i.test(body)) throw new FeedError('parse_error');
   let data: ReturnType<typeof ical.sync.parseICS>;
   try { data = ical.sync.parseICS(body); } catch { throw new FeedError('parse_error'); }
-  const events = new Map<string, CalendarEvent>();
+  const events = new Map<string, ParsedOccurrence>();
   for (const component of Object.values(data)) {
     if (!component || component.type !== 'VEVENT') continue;
     const event = component as VEvent;
@@ -116,8 +123,8 @@ export function parseFeed(body: string, feedId: string, window: { from: Date; to
       const recurrenceId = (instance.event as { recurrenceid?: unknown }).recurrenceid;
       const occurrence = instance.isOverride && valid(recurrenceId) ? recurrenceId.toISOString() : instance.start.toISOString();
       const id = createHash('sha256').update(`${feedId}\n${event.uid}\n${occurrence}`).digest('hex').slice(0, 32);
-      events.set(id, { id, feedId, title: cleanTitle(instance.summary), start, end, allDay });
+      events.set(id, { event: { id, feedId, title: cleanTitle(instance.summary), start, end, allDay }, recurring: instance.isRecurring || instance.isOverride });
     }
   }
-  return [...events.values()].sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id)).slice(0, maxEvents);
+  return [...events.values()].sort((a, b) => a.event.start.localeCompare(b.event.start) || a.event.id.localeCompare(b.event.id)).slice(0, maxEvents);
 }

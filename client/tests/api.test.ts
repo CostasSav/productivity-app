@@ -102,3 +102,42 @@ test('calendar API: GET events by date range, POST refresh with CSRF, 429/409 su
   assert.equal(new Headers(calls[2].options.headers).get('X-CSRF-Token'), 'synthetic-csrf');
   assert.equal(calls[1].options.credentials, 'same-origin');
 });
+
+test('calendar API missing (deploy order): 404, network error or wrong body resolve to unavailable without retry', async t => {
+  const { fetchCalendarEvents, CALENDAR_UNAVAILABLE } = await import('../src/api/calendar');
+  const { QueryClient } = await import('@tanstack/react-query');
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; clearSession(); });
+  let calendarCalls = 0;
+  let respond: () => Response | Promise<Response> = () => new Response('<pre>Cannot GET /api/calendar/events</pre>', { status: 404, headers: { 'Content-Type': 'text/html' } });
+  globalThis.fetch = async url => {
+    if (String(url).includes('/api/auth/')) return Response.json({ authenticated: true, csrfToken: 'synthetic-csrf' });
+    calendarCalls++;
+    return respond();
+  };
+  await browserAuth.session();
+  assert.deepEqual(await fetchCalendarEvents('2026-11-01', '2026-11-09'), CALENDAR_UNAVAILABLE);
+
+  // Same retry policy as main.tsx: the query succeeds (as unavailable) after exactly one request.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: (count, error) => !(error instanceof ApiError && [401, 403].includes(error.status)) && count < 1 } } });
+  calendarCalls = 0;
+  const data = await client.fetchQuery({ queryKey: ['calendar', 'events', 'a', 'b'], queryFn: () => fetchCalendarEvents('2026-11-01', '2026-11-09') });
+  assert.equal(data.unavailable, true);
+  assert.equal(calendarCalls, 1);
+  assert.equal(client.getQueryState(['calendar', 'events', 'a', 'b'])?.status, 'success');
+
+  for (const response of [
+    () => { throw new TypeError('Failed to fetch'); },
+    () => new Response('<html>SPA fallback</html>', { headers: { 'Content-Type': 'text/html' } }),
+    () => Response.json([]),
+    () => Response.json({ synthetic: true }),
+    () => Response.json({ error: 'unavailable' }, { status: 503 }),
+  ]) {
+    respond = response;
+    assert.deepEqual(await fetchCalendarEvents('2026-11-01', '2026-11-09'), CALENDAR_UNAVAILABLE);
+  }
+  respond = () => Response.json({ enabled: false, feeds: [], events: [] });
+  assert.deepEqual(await fetchCalendarEvents('2026-11-01', '2026-11-09'), { enabled: false, feeds: [], events: [] });
+  respond = () => { throw new DOMException('Session changed', 'AbortError'); };
+  await assert.rejects(fetchCalendarEvents('2026-11-01', '2026-11-09'), (error: unknown) => error instanceof DOMException && error.name === 'AbortError');
+});

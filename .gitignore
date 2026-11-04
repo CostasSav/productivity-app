@@ -1,5 +1,7 @@
 .env
 server/data/
+# Local copy of the productivity database at the repo root: never commit
+/db.json
 node_modules/
 dist/
 .DS_Store

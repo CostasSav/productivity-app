@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from 'react';
 import type { Task, Section } from '../../types';
 import { TaskForm } from '../tasks/TaskForm';
 import { ConflictBadge } from './CalendarTimeGrid';
+import { loadHiddenFeeds, saveHiddenFeeds } from './calendarPrefs';
 import { useCalendarEvents } from '../../hooks/useCalendar';
 import { localTodayStr, offsetDay, parseDateKey, weekOf } from '../../utils/date';
 import { eventInterval, filterEventsForRange, findConflicts, formatDayRange } from '../../utils/calendarLayout';
@@ -47,10 +48,15 @@ export function CalendarDayView({ tasks, sections, onCreateTask, onUpdateTask, o
 
   // Fetch the whole visible week so swiping within it needs no new request.
   const calendar = useCalendarEvents(showEvents ? { first: weekDays[0], last: weekDays[6] } : null);
+  // Same per-device preference as the desktop legend chips.
+  const [hiddenFeeds, setHiddenFeeds] = useState<Set<string>>(loadHiddenFeeds);
+  const hiddenCount = calendar.feeds.filter(f => hiddenFeeds.has(f.id)).length;
+  const showAllFeeds = () => { const none = new Set<string>(); saveHiddenFeeds(none); setHiddenFeeds(none); };
   const feedsById = useMemo(() => Object.fromEntries(calendar.feeds.map(f => [f.id, f])), [calendar.feeds]);
   const dayEvents = useMemo(() => filterEventsForRange(calendar.events, selectedDate, selectedDate)
+    .filter(e => !hiddenFeeds.has(e.feedId))
     .sort((a, b) => Number(b.allDay) - Number(a.allDay) || eventInterval(a)[0] - eventInterval(b)[0] || a.title.localeCompare(b.title)),
-  [calendar.events, selectedDate]);
+  [calendar.events, selectedDate, hiddenFeeds]);
   const dayConflicts = useMemo(() => findConflicts(dayEvents), [dayEvents]);
 
   // Tasks for the selected day, sorted high→medium→low then title
@@ -175,6 +181,12 @@ export function CalendarDayView({ tasks, sections, onCreateTask, onUpdateTask, o
               })}
             </ul>
           </section>
+        )}
+        {hiddenCount > 0 && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 pt-2">
+            {hiddenCount} calendar{hiddenCount > 1 ? 's' : ''} hidden ·{' '}
+            <button onClick={showAllFeeds} className="text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">Show all</button>
+          </p>
         )}
 
         {dayTasks.length === 0 && dayEvents.length > 0 ? (

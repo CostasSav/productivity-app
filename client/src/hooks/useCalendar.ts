@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { ApiError } from '../api/request';
+import { fetchCalendarEvents } from '../api/calendar';
 import { queryKeys } from '../lib/queryKeys';
 import { filterEventsForRange, paddedRange, refreshErrorMessage } from '../utils/calendarLayout';
 import type { CalendarEvent, CalendarFeedInfo } from '../types';
@@ -13,10 +14,12 @@ export function useCalendarEvents(range: CalendarRange) {
   const fetchRange = range ? paddedRange(range.first, range.last) : null;
   const query = useQuery({
     queryKey: queryKeys.calendarEvents(fetchRange?.from ?? '', fetchRange?.to ?? ''),
-    queryFn: () => api.calendar.events(fetchRange!.from, fetchRange!.to),
+    // Never throws for a missing/broken calendar API (deploy order): see fetchCalendarEvents.
+    queryFn: () => fetchCalendarEvents(fetchRange!.from, fetchRange!.to),
     enabled: fetchRange !== null,
     staleTime: 2 * 60000,
-    refetchInterval: 5 * 60000,
+    // No polling while unavailable; a later focus or navigation checks again.
+    refetchInterval: query => (query.state.data?.unavailable ? false : 5 * 60000),
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });

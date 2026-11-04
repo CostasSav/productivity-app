@@ -1,6 +1,6 @@
 # Phase 3A — Read-only external calendar feeds
 
-Implemented locally only, server side only. No client changes, deployment, commits or pushes were performed. The productivity database (`db.json`) and the sessions directory are never read or written by this feature.
+Server side in Phase 3A; the Week/Day client is Phase 3B and release preparation Phase 3C. Commits are local until the release checklist below says to push. The productivity database (`db.json`) and the sessions directory are never read or written by this feature.
 
 The server periodically downloads published `.ics` feeds (Outlook and Google), keeps only each occurrence's title and time, and serves them to the signed-in owner for a date range.
 
@@ -103,7 +103,7 @@ Both routes are under `/api`, so the existing session authentication, Origin/CSR
 
 ## Tests
 
-`npm run test -w server` now includes `server/tests/calendar.test.ts`. It uses only synthetic fixtures in `server/tests/fixtures/calendar/` and placeholder URLs, and an injected fake `fetch` (no network). It covers: config validation and host allowlist; an Outlook-style feed with a Windows TZID and a weekly series with one moved, one EXDATE-excluded and one `STATUS:CANCELLED` occurrence; a Google-style Europe/Paris feed; an all-day event; occurrences across the March and October 2026 DST changes; output containing no description, attendees or URLs; redirect, size and timeout limits; last-good data surviving a failed refresh; atomic cache write and reload; refresh de-duplication and the manual rate limit; range validation; and feed URLs never appearing in errors, logs, snapshots or the cache.
+`npm run test -w server` now includes `server/tests/calendar.test.ts`. It uses only synthetic fixtures in `server/tests/fixtures/calendar/` and placeholder URLs, and an injected fake `fetch` (no network). It covers: config validation and host allowlist; an Outlook-style feed with a Windows TZID and a weekly series with one moved, one EXDATE-excluded and one `STATUS:CANCELLED` occurrence; a Google-style Europe/Paris feed; an all-day event; occurrences across the March and October 2026 DST changes; output containing no description, attendees or URLs; redirect, size and timeout limits; last-good data surviving a failed refresh; atomic cache write and reload; refresh de-duplication and the manual rate limit; range validation; and feed URLs never appearing in errors, logs, snapshots or the cache. `server/tests/calendarCheck.test.ts` covers the owner check script with the same fixtures and a fake fetch: grouping, markers, argument limits, refusal of piped input and URL arguments, and that nothing is printed or written.
 
 ## Files
 
@@ -113,9 +113,32 @@ Modified: `server/src/index.ts` (wiring), `server/package.json` (dependency `nod
 
 New dependency `node-ical` 0.27.3 (Apache-2.0, requires Node ≥ 22) brings `rrule-temporal`, `temporal-polyfill`, `temporal-spec` and `temporal-utils`. None appear in `npm audit --omit=dev`.
 
-## Before a later deployment
+## Checking a real feed from your own terminal
 
-1. Confirm Railway runs Node 22 or newer (node-ical requirement).
-2. `npm ci` from the repository root to pick up the lockfile.
-3. Add `CALENDAR_FEEDS`; keep every other variable unchanged.
-4. After deploy, check logs for `[calendar]` lines only showing ids and codes, then call `GET /api/calendar/events` from the signed-in browser and confirm titles, times (especially Outlook series around DST) and all-day dates against the source calendars.
+`npm run calendar:check -w server` lets the owner see exactly what the server would extract from one feed before trusting the Week view. **Run it yourself, in your own interactive terminal.** Never paste a feed URL into chat, tickets or an AI assistant, and never give one to anyone else to run.
+
+```powershell
+npm run calendar:check -w server
+npm run calendar:check -w server -- --from 2026-11-09 --to 2026-11-15
+```
+
+- It asks for **one** feed URL at a hidden prompt. It does not accept the URL as an argument, environment variable, file or piped input (non-interactive stdin is refused). `CALENDAR_FEEDS` and `.env` files are not read.
+- The URL is never printed and nothing is written to disk.
+- It uses the server's own code: the `CALENDAR_FEEDS` URL validation, the fetch limits (15 s, 5 MB, allowlisted redirects) and the parser (time zones, recurrences, EXDATE, moved and cancelled occurrences).
+- `--from`/`--to` (YYYY-MM-DD) default to today → today + 7 and must stay inside the sync window (today − 14 to today + 90 days).
+- Output is grouped by day in Europe/Paris: `start–end` (`(+1)` when it ends the next day) or `all day`, `rec` for an occurrence of a recurring series, and the title cut to 40 characters. It ends with totals and the feed status (`ok`, `timeout`, `http_error`, `parse_error`). Titles are your calendar data: keep the output private.
+
+## Deploy order and Node version
+
+- The client treats `/api/calendar/*` as optional. A 404, network error or unexpected response (for example the old server, or a frontend deployed before the backend) shows no events, no legend and no error, and does not poll until the next focus or navigation. Week/Day views keep working with tasks only. Deploying the server first is still the cleaner order.
+- `server/package.json` declares `"engines": { "node": ">=22" }` (node-ical requirement). The repository has no `.nvmrc`, `.node-version`, `railway.json`, `nixpacks.toml`, Procfile or Dockerfile, so nothing in the repo pins or overrides the Node version. Whether Railway's builder honours `engines` must be confirmed in the Railway build logs; the repo cannot show it.
+
+## Release checklist
+
+1. While signed in, open `/api/calendar/events?from=YYYY-MM-DD&to=YYYY-MM-DD` on the Vercel domain (at most 62 days) and confirm every feed reports `"status": "ok"`.
+2. Compare real events with Outlook and Google, with `calendar:check` or directly in the Week view, especially recurring meetings around a time change (29 March / 25 October) and moved or cancelled occurrences.
+3. Push the remaining commits; confirm both the server and client deployments succeed.
+4. On iPhone, accept the PWA "Reload" prompt, then check the mobile agenda (including "calendar hidden · Show all") and dark mode.
+5. Test task drag-and-drop in the Week all-day row with a real mouse.
+
+What the repository shows about automatic deploys: `client/vercel.json` and a local, gitignored `.vercel/repo.json` link this repository to a Vercel project with root directory `client`, but nothing in the repo proves that a push to `main` triggers a Vercel build (that is a Vercel project setting). There is no Railway configuration file and no CI workflow (`.github/` is absent), so the repo shows nothing about Railway auto-deploys. Check both dashboards before pushing.
