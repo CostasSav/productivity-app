@@ -11,6 +11,9 @@ const HOUR_PX = 48;
 const PX_PER_MIN = HOUR_PX / 60;
 const FALLBACK_COLOR = '#6b7280';
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const WORK_START = 8;
+const WORK_END = 18;
+const OFF_HOURS_CLASS = 'absolute inset-x-0 bg-gray-100/70 dark:bg-white/[0.045] pointer-events-none';
 
 interface CalendarTimeGridProps {
   days: string[];
@@ -219,9 +222,17 @@ export function CalendarTimeGrid({ days, today, events, feeds, tasksByDate, rend
 
             {days.map(day => (
               <div key={day} className={`relative border-l border-gray-100 dark:border-zinc-800/60 ${day === today ? 'bg-teal-50/30 dark:bg-teal-900/5' : ''}`}>
+                {/* Non-working time (before 08:00, after 18:00, weekends) is lightly shaded, as in Teams */}
+                {[0, 6].includes(parseDateKey(day).getDay()) ? (
+                  <div className={OFF_HOURS_CLASS} style={{ top: 0, height: 24 * HOUR_PX }} aria-hidden />
+                ) : (<>
+                  <div className={OFF_HOURS_CLASS} style={{ top: 0, height: WORK_START * HOUR_PX }} aria-hidden />
+                  <div className={OFF_HOURS_CLASS} style={{ top: WORK_END * HOUR_PX, height: (24 - WORK_END) * HOUR_PX }} aria-hidden />
+                </>)}
+
                 {/* Hour and 30-min gridlines */}
                 {HOURS.map(h => (
-                  <div key={h} className="absolute inset-x-0 border-t border-gray-100 dark:border-zinc-800/60" style={{ top: h * HOUR_PX, height: HOUR_PX }}>
+                  <div key={h} className={`absolute inset-x-0 border-t ${h === WORK_START || h === WORK_END ? 'border-gray-300 dark:border-zinc-600' : 'border-gray-100 dark:border-zinc-800/60'}`} style={{ top: h * HOUR_PX, height: HOUR_PX }}>
                     <div className="absolute inset-x-0 border-t border-dashed border-gray-100/70 dark:border-zinc-800/40" style={{ top: HOUR_PX / 2 }} />
                   </div>
                 ))}
