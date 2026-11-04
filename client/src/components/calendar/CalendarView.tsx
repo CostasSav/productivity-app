@@ -88,6 +88,10 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
   const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  // While a task dragged out of the "+x more" overlay is over other days, the overlay hides
+  // (kept mounted so the drag source still receives dragend) and comes back over its own day.
+  const [overlayCollapsed, setOverlayCollapsed] = useState(false);
+  const dragFromOverlay = useRef(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<number>>(new Set());
   const [edgeHint, setEdgeHint] = useState<'left' | 'right' | null>(null);
   const [showBacklog, setShowBacklog] = useState(false);
@@ -279,6 +283,16 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
     ids.forEach(id => onUpdateTask(id, { deadline: dateStr }));
     setDraggingTaskId(null);
     setSelectedTaskIds(new Set());
+    // Moved to another day: the overlay's job is done. Dropped back on its own day: keep it open.
+    if (dateStr !== expandedDate) setExpandedDate(null);
+    setOverlayCollapsed(false);
+  };
+
+  // Called from every month cell's dragover while a task dragged from the overlay is in flight.
+  const trackOverlayDrag = (dateStr: string) => {
+    if (!dragFromOverlay.current) return;
+    const collapse = dateStr !== expandedDate;
+    if (collapse !== overlayCollapsed) setOverlayCollapsed(collapse);
   };
 
   // Task pill — shared between calendar cells and expanded overlay
@@ -291,8 +305,9 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
         <div
           key={task.id}
           draggable
-          onDragStart={e => { startDrag(e, task); }}
-          onDragEnd={() => { setDraggingTaskId(null); setDragOverDate(null); setExpandedDate(null); clearEdgeTimer(); }}
+          onDragStart={e => { dragFromOverlay.current = true; startDrag(e, task); }}
+          // No drop on another day (cancelled or released over the overlay): the overlay comes back.
+          onDragEnd={() => { dragFromOverlay.current = false; setOverlayCollapsed(false); setDraggingTaskId(null); setDragOverDate(null); clearEdgeTimer(); }}
           onClick={e => {
             if (e.shiftKey) { e.stopPropagation(); toggleSelect(task.id); }
           }}
@@ -578,7 +593,7 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
                         hasOverdue ? 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20' :
                         'border-gray-200 bg-white hover:bg-gray-50 dark:border-zinc-800/60 dark:bg-[#09090b] dark:hover:bg-[#0e0e10]'}`}
                     onClick={() => { if (!isExpanded) { setSelectedTaskIds(new Set()); setCreatingForDate(dateStr); } }}
-                    onDragOver={e => { e.preventDefault(); setDragOverDate(dateStr); }}
+                    onDragOver={e => { e.preventDefault(); setDragOverDate(dateStr); trackOverlayDrag(dateStr); }}
                     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverDate(null); }}
                     onDrop={e => handleDrop(e, dateStr)}
                   >
@@ -601,9 +616,15 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
                     {/* In-place expanded overlay */}
                     {isExpanded && (
                       <div
-                        className={`absolute top-0 bg-white dark:bg-[#111113] border border-teal-400 rounded-lg shadow-xl z-20 flex flex-col ${di >= 4 ? 'right-0' : 'left-0'}`}
+                        className={`absolute top-0 bg-white dark:bg-[#111113] border border-teal-400 rounded-lg shadow-xl z-20 flex flex-col ${di >= 4 ? 'right-0' : 'left-0'}
+                          ${overlayCollapsed ? 'invisible pointer-events-none' : ''}`}
                         style={{ minWidth: 'min(220px, calc(100vw - 32px))', maxHeight: '280px' }}
                         onClick={e => e.stopPropagation()}
+                        onDragLeave={e => {
+                          // Pointer left the overlay's box (relatedTarget is unreliable during drags in Safari).
+                          const r = e.currentTarget.getBoundingClientRect();
+                          if (dragFromOverlay.current && (e.clientX < r.left || e.clientX >= r.right || e.clientY < r.top || e.clientY >= r.bottom)) setOverlayCollapsed(true);
+                        }}
                       >
                         <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-200 dark:border-zinc-800/60 flex-shrink-0">
                           <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">
@@ -684,6 +705,8 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
               ids.forEach(id => onUpdateTask(id, { deadline: null }));
               setDraggingTaskId(null);
               setSelectedTaskIds(new Set());
+              setExpandedDate(null);
+              setOverlayCollapsed(false);
             }}
           >
             {backlogTasks.length === 0 ? (
