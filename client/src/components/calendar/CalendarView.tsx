@@ -514,7 +514,12 @@ export function CalendarView({ tasks, sections, onUpdateTask, onCreateTask, onCr
             onDragOver: e => { e.preventDefault(); setDragOverDate(day); },
             onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverDate(null); },
             onDrop: e => handleDrop(e, day),
-            className: dragOverDate === day ? 'bg-teal-50 dark:bg-teal-900/20 ring-2 ring-inset ring-teal-300' : '',
+            // Empty space creates a task for that day, as in Month view (no time slots yet, so all-day only).
+            onClick: () => { setSelectedTaskIds(new Set()); setCreatingForDate(day); },
+            title: 'Click to add a task',
+            className: dragOverDate === day
+              ? 'bg-teal-50 dark:bg-teal-900/20 ring-2 ring-inset ring-teal-300'
+              : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-[#0e0e10]',
           })}
         />
       )}

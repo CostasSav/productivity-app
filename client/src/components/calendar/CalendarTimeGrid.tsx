@@ -193,7 +193,7 @@ export function CalendarTimeGrid({ days, today, events, feeds, tasksByDate, rend
                 {allDay.map(event => (
                   <button
                     key={event.id}
-                    onClick={e => openEvent(event, e.currentTarget)}
+                    onClick={e => { e.stopPropagation(); openEvent(event, e.currentTarget); }}
                     aria-label={eventLabel(event, feeds[event.feedId], false)}
                     aria-haspopup="dialog"
                     className="w-full text-left text-xs px-1.5 py-0.5 rounded truncate text-gray-800 dark:text-gray-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
