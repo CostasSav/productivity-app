@@ -31,6 +31,13 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
   const [brushIndex, setBrushIndex] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   const [wrapAll, setWrapAll] = useState(false);
+  // Remembered per planning on this device.
+  const hideDoneKey = `planning_hide_done_${id}`;
+  const [hideDone, setHideDoneState] = useState(() => { try { return localStorage.getItem(hideDoneKey) === '1'; } catch { return false; } });
+  const setHideDone = (hide: boolean) => {
+    setHideDoneState(hide);
+    try { if (hide) localStorage.setItem(hideDoneKey, '1'); else localStorage.removeItem(hideDoneKey); } catch { /* not remembered */ }
+  };
   const [confirmShowIgnored, setConfirmShowIgnored] = useState(false);
   const [highlight, setHighlight] = useState<ReadonlySet<number>>(() => new Set());
   // Each toast gets its own id so a repeat message restarts the timer, but re-renders don't.
@@ -75,6 +82,7 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
       <PlanningToolbar planning={planning} tasksById={tasksById} section={section} owners={owners}
         ownerFilter={activeFilter} onOwnerFilterChange={setOwnerFilter} brush={brush} onBrushChange={setBrushIndex}
         onShowIgnored={() => setConfirmShowIgnored(true)} wrapAll={wrapAll} onWrapAllChange={setWrapAll}
+        hideDone={hideDone} onHideDoneChange={setHideDone}
         onExportError={message => setToast({ id: Date.now(), message, tone: 'error' })} onBack={onBack} />
 
       {missingCount > 0 && section && (
@@ -100,7 +108,7 @@ export function PlanningView({ id, onBack }: PlanningViewProps) {
         {owners.map(o => <option key={o} value={o} />)}
       </datalist>
       <PlanningGrid planning={planning} tasksById={tasksById} tasksLoading={tasksLoading} ownerFilter={activeFilter}
-        ownersListId={ownersListId} brushColor={brushColor} highlightTaskIds={highlight} wrapAll={wrapAll} onEditTask={setEditingTask}
+        ownersListId={ownersListId} brushColor={brushColor} highlightTaskIds={highlight} wrapAll={wrapAll} hideDone={hideDone} onEditTask={setEditingTask}
         onToggleTaskDone={(task, done) => {
           // Exactly the Tasks page path: optimistic cache update, recurrence handled by the server.
           updateTask(task.id, { status: done ? 'done' : 'todo' }).catch(() => {});

@@ -17,7 +17,7 @@ import {
   clampCreate, clampMove, clampResize, computeReorder, containerEntries, countdownLabel, formatPlanningDate, freeGap,
   mondayOf, monthSpans, newSegmentId, nextProgressStep, planningItemProgress, planningItemTitle, planningWeeks,
   resolvePlanningLink, weekEnd, weekMonday, weeksBetween, deadlineIssue, deadlineSyncTask, alignedToDeadline,
-  groupPriority, nextGroupPriority, rootDisplayEntries, sortedModeDrop,
+  groupPriority, nextGroupPriority, rootDisplayEntries, sortedModeDrop, planningItemDone,
   type DeadlineIssue, type DropTarget, type EntryKey, type Gap, type PlanningLink, type WeekSpan,
 } from '../../utils/planning';
 import { localDateStr } from '../../utils/habitStats';
@@ -109,12 +109,14 @@ interface PlanningGridProps {
   onToggleSubtaskDone: (taskId: number, subtaskId: number, done: boolean) => void;
   /** Every name expanded at once (toolbar toggle); a click on a row then shortens just that row. */
   wrapAll?: boolean;
+  /** Hide done rows (same "done" as the row checkbox). Reordering still works: drops use the full data. */
+  hideDone?: boolean;
   onEditTask: (task: Task) => void;
 }
 
 export function PlanningGrid({
   planning, tasksById, tasksLoading, ownerFilter, ownersListId, brushColor, highlightTaskIds,
-  onLinkedRemoved, onDeadlineSynced, onToggleTaskDone, onToggleSubtaskDone, wrapAll = false, onEditTask,
+  onLinkedRemoved, onDeadlineSynced, onToggleTaskDone, onToggleSubtaskDone, wrapAll = false, hideDone = false, onEditTask,
 }: PlanningGridProps) {
   const isMobile = useMobile();
   // Title width is per planning (dragged in the header); phones keep the compact layout.
@@ -190,12 +192,15 @@ export function PlanningGrid({
       byGroup.set(i.groupId, [...(byGroup.get(i.groupId) ?? []), i]);
     });
     const out: Row[] = [];
+    const visible = (i: PlanningItem) => matchesOwner(i, ownerFilter) && !(hideDone && planningItemDone(i, tasksById));
     for (const entry of rootEntries) {
       if (entry.kind === 'group') {
         const group = planning.groups.find(g => g.id === entry.id)!;
         const all = byGroup.get(group.id) ?? [];
-        const members = all.filter(i => matchesOwner(i, ownerFilter));
+        const members = all.filter(visible);
         if (filtering && members.length === 0) continue;
+        // A group whose items are all done goes with them; a group that is simply empty stays.
+        if (hideDone && all.length > 0 && members.length === 0) continue;
         out.push({ kind: 'group', group, members, total: all.length });
         if (!group.collapsed) {
           members.forEach(item => out.push({ kind: 'item', item, nested: true }));
@@ -203,12 +208,12 @@ export function PlanningGrid({
         }
       } else {
         const item = planning.items.find(i => i.id === entry.id)!;
-        if (matchesOwner(item, ownerFilter)) out.push({ kind: 'item', item, nested: false });
+        if (visible(item)) out.push({ kind: 'item', item, nested: false });
       }
     }
     out.push({ kind: 'add-root' });
     return out;
-  }, [planning, rootEntries, ownerFilter, filtering]);
+  }, [planning, rootEntries, ownerFilter, filtering, hideDone, tasksById]);
 
   // ── Brief slide when groups change place (FLIP), so the eye can follow a re-sort ──
   const rowTops = useRef(new Map<string, number>());
@@ -720,7 +725,7 @@ export function PlanningGrid({
               // Done: the linked task or subtask, or 100% for a standalone item. A subtask row also
               // counts as done (100%, as before) when its parent task is done; its box is then locked.
               const parentDone = !!link?.subtask && link.task.status === 'done';
-              const done = link ? parentDone || (link.subtask ?? link.task).status === 'done' : item.progress === 100;
+              const done = planningItemDone(item, tasksById);
               const toggleDone = (next: boolean) => {
                 if (link?.subtask) onToggleSubtaskDone(link.task.id, link.subtask.id, next);
                 else if (link) onToggleTaskDone(link.task, next);

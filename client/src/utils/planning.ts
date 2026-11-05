@@ -48,6 +48,16 @@ export function planningItemTitle(item: PlanningItem, tasksById: Map<number, Tas
  * A subtask link counts as done when the subtask (or its parent) is done.
  * Standalone (or dangling): the stored progress.
  */
+/**
+ * Same "done" as the row checkbox: the linked task or subtask is done (a subtask
+ * row also counts as done when its parent task is), or 100% for a standalone item.
+ */
+export function planningItemDone(item: PlanningItem, tasksById: Map<number, Task>): boolean {
+  const link = resolvePlanningLink(item, tasksById);
+  if (!link) return item.progress === 100;
+  return link.task.status === 'done' || link.subtask?.status === 'done';
+}
+
 export function planningItemProgress(item: PlanningItem, tasksById: Map<number, Task>): number {
   const link = resolvePlanningLink(item, tasksById);
   if (!link) return item.progress;

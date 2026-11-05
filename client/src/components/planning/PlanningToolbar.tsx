@@ -34,11 +34,13 @@ interface PlanningToolbarProps {
   onShowIgnored: () => void;
   wrapAll: boolean;
   onWrapAllChange: (wrap: boolean) => void;
+  hideDone: boolean;
+  onHideDoneChange: (hide: boolean) => void;
   onExportError: (message: string) => void;
   onBack: () => void;
 }
 
-export function PlanningToolbar({ planning, tasksById, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onShowIgnored, wrapAll, onWrapAllChange, onExportError, onBack }: PlanningToolbarProps) {
+export function PlanningToolbar({ planning, tasksById, section, owners, ownerFilter, onOwnerFilterChange, brush, onBrushChange, onShowIgnored, wrapAll, onWrapAllChange, hideDone, onHideDoneChange, onExportError, onBack }: PlanningToolbarProps) {
   const [exporting, setExporting] = useState(false);
   const [confirmApply, setConfirmApply] = useState(false);
   const updatePlanning = useUpdatePlanning();
@@ -112,6 +114,7 @@ export function PlanningToolbar({ planning, tasksById, section, owners, ownerFil
       {exporting && (
         <ExportDialog planningId={planning.id} owners={owners}
           initialOwner={ownerFilter !== ALL_OWNERS && ownerFilter !== UNASSIGNED ? ownerFilter : undefined}
+          initialIncludeDone={!hideDone}
           // Every group in on-screen order (same function as the grid); the server drops the ones a filter empties.
           groupIds={rootDisplayEntries(planning, tasksById.values()).flatMap(e => (e.kind === 'group' ? [e.id] : []))}
           onError={onExportError} onClose={() => setExporting(false)} />
@@ -206,6 +209,23 @@ export function PlanningToolbar({ planning, tasksById, section, owners, ownerFil
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h13a3 3 0 010 6h-4m0 0l2-2m-2 2l2 2M4 18h5" />
             </svg>
             Wrap all names
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className={labelCls}>Done</span>
+          <button type="button" aria-pressed={hideDone} onClick={() => onHideDoneChange(!hideDone)}
+            title={hideDone ? 'Show finished tasks again' : 'Hide finished tasks (and groups where everything is done)'}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded border text-sm cursor-pointer transition-colors
+              ${hideDone
+                ? 'border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-white/[0.06]'}`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} aria-hidden>
+              {hideDone
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />}
+            </svg>
+            Hide done
           </button>
         </div>
 

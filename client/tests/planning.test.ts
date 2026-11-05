@@ -169,3 +169,19 @@ test('export with the on-screen group order is a POST with the CSRF token; quick
   assert.deepEqual(calls[0], { url: '/api/plannings/4/export', method: 'POST', csrf: 'synthetic-csrf', body: { lang: 'en', includeDone: false, groupIds: [3, 1, 2] } });
   assert.deepEqual([calls[1].method, calls[1].url, calls[1].csrf], ['GET', '/api/plannings/4/export.xlsx?lang=fr&includeDone=true', null]);
 });
+
+test('planningItemDone matches the row checkbox rule', async () => {
+  const { planningItemDone } = await import('../src/utils/planning');
+  const base = { id: 1, planningId: 1, groupId: null, taskId: null, subtaskId: null, title: 'x', owner: null, progress: 0, progressBeforeDone: null, order: 0, segments: [] } as PlanningItem;
+  const task = (status: 'todo' | 'done', subStatus: 'todo' | 'done' = 'todo') =>
+    ({ id: 5, status, subtasks: [{ id: 9, title: 's', status: subStatus }] }) as unknown as Task;
+  const tasks = (t: Task) => new Map([[5, t]]);
+  assert.equal(planningItemDone({ ...base, progress: 100 }, new Map()), true, 'standalone at 100%');
+  assert.equal(planningItemDone({ ...base, progress: 75 }, new Map()), false);
+  assert.equal(planningItemDone({ ...base, taskId: 5, progress: 100 }, tasks(task('todo'))), false, 'linked: the task decides, not the snapshot');
+  assert.equal(planningItemDone({ ...base, taskId: 5 }, tasks(task('done'))), true);
+  assert.equal(planningItemDone({ ...base, taskId: 5, subtaskId: 9 }, tasks(task('todo', 'done'))), true, 'done subtask');
+  assert.equal(planningItemDone({ ...base, taskId: 5, subtaskId: 9 }, tasks(task('done', 'todo'))), true, 'parent done');
+  assert.equal(planningItemDone({ ...base, taskId: 5, subtaskId: 9 }, tasks(task('todo', 'todo'))), false);
+  assert.equal(planningItemDone({ ...base, taskId: 77, progress: 100 }, new Map()), true, 'dangling link behaves as standalone');
+});
